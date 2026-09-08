@@ -42,18 +42,43 @@ export function Console() {
 
   const guild = view.t === "guild" ? guilds.find((g) => g.id === view.id) : undefined;
 
+  const guildId = view.t === "guild" ? view.id : null;
+  const channelId = view.t === "guild" ? view.channelId : undefined;
+  const tab = view.t === "guild" ? view.tab : null;
+
+  // Load guild data once per server; auto-pick first text channel only when none selected.
+  // Depend on primitives — NOT the whole `view` object — or setView retriggers forever (React #185).
   useEffect(() => {
-    if (view.t !== "guild") return;
-    const guildId = view.id;
-    const tab = view.tab;
-    const selected = view.channelId;
-    void loadGuild(guildId).then(() => {
-      if (selected) return;
+    if (!guildId || !tab) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await loadGuild(guildId);
+      } catch {
+        return;
+      }
+      if (cancelled) return;
+
+      // Already has a channel selection — do not touch view again.
+      if (channelId) return;
+
       const list = useRelay.getState().channels[guildId] ?? [];
       const first = list.find((c) => isTextLike(c.type));
-      if (first) setView({ t: "guild", id: guildId, tab, channelId: first.id });
-    });
-  }, [view, loadGuild, setView]);
+      if (!first) return;
+
+      // Re-check after await — user may have selected a channel in the meantime.
+      const current = useRelay.getState().view;
+      if (current.t === "guild" && current.id === guildId && current.channelId) return;
+
+      setView({ t: "guild", id: guildId, tab, channelId: first.id });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [guildId, channelId, tab, loadGuild, setView]);
 
   useEffect(() => {
     if (!rateLimit) return;
@@ -146,24 +171,24 @@ export function Console() {
             <>
               <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 md:px-3">
                 <span className="mr-2 hidden truncate text-sm font-medium md:inline">{guild.name}</span>
-                {TABS.map((tab) => (
+                {TABS.map((tabItem) => (
                   <button
-                    key={tab.id}
+                    key={tabItem.id}
                     type="button"
                     onClick={() =>
                       setView({
                         t: "guild",
                         id: guild.id,
-                        tab: tab.id,
+                        tab: tabItem.id,
                         channelId: view.t === "guild" ? view.channelId : undefined,
                       })
                     }
                     className={cn(
                       "h-8 shrink-0 rounded-md px-3 text-sm",
-                      view.tab === tab.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+                      view.tab === tabItem.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    {tab.label}
+                    {tabItem.label}
                   </button>
                 ))}
               </div>
@@ -190,7 +215,6 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const view = useRelay((s) => s.view);
   const setView = useRelay((s) => s.setView);
   const guilds = useRelay((s) => s.guilds);
-  const loadGuild = useRelay((s) => s.loadGuild);
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -221,8 +245,8 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
               <button
                 type="button"
                 onClick={() => {
+                  // Only set view — loadGuild runs from Console effect. Avoid double-fetch races.
                   setView({ t: "guild", id: g.id, tab: "chat" });
-                  void loadGuild(g.id);
                   onNavigate();
                 }}
                 className={cn(
