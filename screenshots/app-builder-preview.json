@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Relay",
+      "hasCanvas": false,
+      "bodyTextLen": 738,
+      "bodyTextHash": "8b674c30f3e070fea8d2ac317b6f5f1d03cb1800450cd34ee39d4b20f88c3814",
+      "bodyTextPrefix": "Relay Anyone with a bot token can use this. BOT CONSOLE A consol",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Relay",
+      "hasCanvas": false,
+      "bodyTextLen": 700,
+      "bodyTextHash": "e77828dc7e11443645e92c2b111e33413141879d2d65fbcd592827b16eec7c1d",
+      "bodyTextPrefix": "Relay BOT CONSOLE A console for every Discord bot. Paste a bot t",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

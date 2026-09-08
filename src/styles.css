@@ -1,0 +1,99 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-background: #0a0b0d;
+  --color-foreground: #f2f1ed;
+  --color-card: #121317;
+  --color-card-foreground: #f2f1ed;
+  --color-popover: #16171c;
+  --color-popover-foreground: #f2f1ed;
+  --color-primary: #e8e2d6;
+  --color-primary-foreground: #12110e;
+  --color-secondary: #1c1d22;
+  --color-secondary-foreground: #f2f1ed;
+  --color-muted: #1c1d22;
+  --color-muted-foreground: #8a8c91;
+  --color-accent: #1c1d22;
+  --color-accent-foreground: #f2f1ed;
+  --color-destructive: #c45c4a;
+  --color-destructive-foreground: #f2f1ed;
+  --color-border: #26272c;
+  --color-input: #26272c;
+  --color-ring: #c9bfb0;
+  --color-stone: #c9bfb0;
+  --color-success: #6f8f72;
+
+  --radius: 0.75rem;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  --shadow-soft: 0 12px 40px -18px rgb(0 0 0 / 0.55);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@utility scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-foreground) 18%, transparent) transparent;
+}
+
+@utility bg-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--color-foreground) 5.5%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--color-foreground) 5.5%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 56px 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
