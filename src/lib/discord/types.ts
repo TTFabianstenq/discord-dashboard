@@ -64,6 +64,7 @@ export type DiscordMember = {
   avatar?: string | null;
   roles: string[];
   joined_at: string;
+  communication_disabled_until?: string | null;
 };
 
 export type DiscordEmbedField = {
@@ -78,9 +79,11 @@ export type DiscordEmbed = {
   url?: string;
   color?: number;
   timestamp?: string;
-  footer?: { text: string };
-  author?: { name: string };
+  footer?: { text: string; icon_url?: string };
+  author?: { name: string; url?: string; icon_url?: string };
   fields?: DiscordEmbedField[];
+  thumbnail?: { url: string };
+  image?: { url: string };
 };
 
 export type DiscordMessage = {
@@ -97,6 +100,50 @@ export type DiscordMessage = {
   webhook_id?: string;
 };
 
+export type DiscordWebhook = {
+  id: string;
+  type: number;
+  guild_id?: string;
+  channel_id: string;
+  name: string | null;
+  avatar: string | null;
+  token?: string;
+  application_id?: string | null;
+  url?: string;
+};
+
+export type DiscordApplicationCommandOption = {
+  type: number;
+  name: string;
+  description: string;
+  required?: boolean;
+  choices?: { name: string; value: string | number }[];
+  options?: DiscordApplicationCommandOption[];
+};
+
+export type DiscordApplicationCommand = {
+  id: string;
+  application_id: string;
+  guild_id?: string;
+  name: string;
+  description: string;
+  type: number;
+  options?: DiscordApplicationCommandOption[];
+  default_member_permissions?: string | null;
+  dm_permission?: boolean;
+  nsfw?: boolean;
+};
+
+export type DiscordPresenceUpdate = {
+  status: "online" | "idle" | "dnd" | "invisible";
+  activities?: {
+    name: string;
+    type: number;
+    url?: string;
+    state?: string;
+  }[];
+};
+
 export const CHANNEL_TYPES = {
   GUILD_TEXT: 0,
   DM: 1,
@@ -109,7 +156,22 @@ export const CHANNEL_TYPES = {
   GUILD_MEDIA: 16,
 } as const;
 
-export type GuildTab = "chat" | "channels" | "members" | "server";
+export const COMMAND_TYPES = {
+  CHAT_INPUT: 1,
+  USER: 2,
+  MESSAGE: 3,
+} as const;
+
+export const ACTIVITY_TYPES = {
+  PLAYING: 0,
+  STREAMING: 1,
+  LISTENING: 2,
+  WATCHING: 3,
+  CUSTOM: 4,
+  COMPETING: 5,
+} as const;
+
+export type GuildTab = "chat" | "channels" | "roles" | "members" | "webhooks" | "commands" | "server";
 
 export type AppView =
   | { t: "overview" }
