@@ -197,7 +197,7 @@ function MessageRow({ message, mine }: { message: DiscordMessage; mine: boolean 
         </div>
         {editing ? (
           <div className="mt-2 flex flex-col gap-2">
-            <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-20" /> />
+            <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-20" />
             <div className="flex gap-2">
               <Button size="sm" onClick={() => void save()}>
                 Save
@@ -292,7 +292,7 @@ function Composer({ channelId }: { channelId: string }) {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="embed-color">Color</Label>
-              <Input id="embed-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-11 w-20 p-1" />/>
+              <Input id="embed-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-11 w-20 p-1" />
             </div>
           </div>
         ) : null}
