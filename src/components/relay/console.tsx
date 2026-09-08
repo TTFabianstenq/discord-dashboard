@@ -276,6 +276,7 @@ function GuildRail({
       </div>
       <div className="scroll-thin flex-1 overflow-y-auto p-2">
         <ChannelTree
+          guildId={guildId}
           channels={list}
           activeId={channelId}
           onSelect={(ch) => {
