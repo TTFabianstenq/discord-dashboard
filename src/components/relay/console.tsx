@@ -16,11 +16,13 @@ import { EntityAvatar } from "./entity-avatar";
 import { MembersPanel } from "./members-panel";
 import { RelayMark } from "./mark";
 import { Overview } from "./overview";
+import { RoleManager } from "./role-manager";
 import { ServerSettings } from "./server-settings";
 
 const TABS: { id: GuildTab; label: string }[] = [
   { id: "chat", label: "Chat" },
   { id: "channels", label: "Channels" },
+  { id: "roles", label: "Roles" },
   { id: "members", label: "Members" },
   { id: "server", label: "Server" },
 ];
@@ -33,7 +35,10 @@ export function Console() {
   const mode = useRelay((s) => s.mode);
   const disconnect = useRelay((s) => s.disconnect);
   const loadGuild = useRelay((s) => s.loadGuild);
+  const rateLimit = useRelay((s) => s.rateLimit);
+  const clearRateLimit = useRelay((s) => s.clearRateLimit);
   const [navOpen, setNavOpen] = useState(false);
+  const [now, setNow] = useState(Date.now());
 
   const guild = view.t === "guild" ? guilds.find((g) => g.id === view.id) : undefined;
 
@@ -50,14 +55,35 @@ export function Console() {
     });
   }, [view, loadGuild, setView]);
 
-  const nav = (
-    <Sidebar
-      onNavigate={() => setNavOpen(false)}
-    />
-  );
+  useEffect(() => {
+    if (!rateLimit) return;
+    const id = window.setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      if (t >= rateLimit.until) clearRateLimit();
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [rateLimit, clearRateLimit]);
+
+  const rateLimitSeconds =
+    rateLimit && rateLimit.until > now ? Math.ceil((rateLimit.until - now) / 1000) : 0;
+
+  const nav = <Sidebar onNavigate={() => setNavOpen(false)} />;
 
   return (
     <div className="flex h-dvh flex-col bg-background">
+      {rateLimitSeconds > 0 ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 sm:px-4">
+          <span>
+            Discord rate-limited this request. Retry in <rateLimitSeconds}s.
+            {rateLimit?.message ? ` ${rateLimit.message}` : ""}
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => clearRateLimit()}>
+            Dismiss
+          </Button>
+        </div>
+      ) : null}
+
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
         <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setNavOpen(true)} aria-label="Open menu">
           <Menu className="size-4" />
@@ -124,7 +150,14 @@ export function Console() {
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setView({ t: "guild", id: guild.id, tab: tab.id, channelId: view.t === "guild" ? view.channelId : undefined })}
+                    onClick={() =>
+                      setView({
+                        t: "guild",
+                        id: guild.id,
+                        tab: tab.id,
+                        channelId: view.t === "guild" ? view.channelId : undefined,
+                      })
+                    }
                     className={cn(
                       "h-8 shrink-0 rounded-md px-3 text-sm",
                       view.tab === tab.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
@@ -136,6 +169,7 @@ export function Console() {
               </div>
               {view.tab === "chat" ? <Chat guildId={guild.id} channelId={view.channelId} /> : null}
               {view.tab === "channels" ? <ChannelManager guildId={guild.id} /> : null}
+              {view.tab === "roles" ? <RoleManager guildId={guild.id} /> : null}
               {view.tab === "members" ? <MembersPanel guildId={guild.id} /> : null}
               {view.tab === "server" ? <ServerSettings guildId={guild.id} /> : null}
             </>
