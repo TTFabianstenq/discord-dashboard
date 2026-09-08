@@ -75,7 +75,7 @@ export function Console() {
       {rateLimitSeconds > 0 ? (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 sm:px-4">
           <span>
-            Discord rate-limited this request. Retry in <rateLimitSeconds}s.
+            Discord rate-limited this request. Retry in {rateLimitSeconds}s.
             {rateLimit?.message ? ` ${rateLimit.message}` : ""}
           </span>
           <Button variant="ghost" size="sm" onClick={() => clearRateLimit()}>
