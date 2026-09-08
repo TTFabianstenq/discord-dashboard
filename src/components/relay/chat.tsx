@@ -21,21 +21,30 @@ import { ChannelIcon } from "./channel-tree";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function Chat({ guildId, channelId }: { guildId: string; channelId?: string }) {
-  const channels = useRelay((s) => s.channels[guildId] ?? []);
+  const channels = useRelay((s) => s.channels[guildId]);
   const loadMessages = useRelay((s) => s.loadMessages);
   const setView = useRelay((s) => s.setView);
-  const textChannels = channels.filter((c) => isTextLike(c.type));
-  const channel = channels.find((c) => c.id === channelId) ?? textChannels[0];
+  const list = channels ?? [];
+  const textChannels = list.filter((c) => isTextLike(c.type));
+  const channel = channelId ? list.find((c) => c.id === channelId) : undefined;
 
   useEffect(() => {
-    if (channel && isTextLike(channel.type)) void loadMessages(channel.id);
-  }, [channel?.id, loadMessages]);
+    if (channelId) void loadMessages(channelId);
+  }, [channelId, loadMessages]);
 
-  if (!channel) {
+  if (!channelId || !channel) {
     return (
-      <Empty title="No text channel" body="Create a text channel in the Channels tab, then come back to chat." />
+      <Empty
+        title={list.length === 0 ? "Loading channels…" : "No text channel"}
+        body={
+          list.length === 0
+            ? "Fetching channels for this server."
+            : "Create a text channel in the Channels tab, then come back to chat."
+        }
+      />
     );
   }
+
   if (!isTextLike(channel.type)) {
     return (
       <Empty
@@ -86,21 +95,22 @@ function Empty({ title, body }: { title: string; body: string }) {
 }
 
 function MessageList({ channelId }: { channelId: string }) {
-  const messages = useRelay((s) => s.messages[channelId] ?? []);
+  const messages = useRelay((s) => s.messages[channelId]);
   const botId = useRelay((s) => s.bot?.id);
   const bottom = useRef<HTMLDivElement>(null);
+  const list = messages ?? [];
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, channelId]);
+  }, [list.length, channelId]);
 
   return (
     <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-4 py-4">
-      {messages.length === 0 ? (
+      {list.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">No messages in this channel yet.</p>
       ) : (
         <ul className="flex flex-col gap-4">
-          {messages.map((m) => (
+          {list.map((m) => (
             <MessageRow key={m.id} message={m} mine={m.author.id === botId} />
           ))}
         </ul>
@@ -187,7 +197,7 @@ function MessageRow({ message, mine }: { message: DiscordMessage; mine: boolean 
         </div>
         {editing ? (
           <div className="mt-2 flex flex-col gap-2">
-            <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-20" />
+            <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} className="min-h-20" /> />
             <div className="flex gap-2">
               <Button size="sm" onClick={() => void save()}>
                 Save
@@ -282,7 +292,7 @@ function Composer({ channelId }: { channelId: string }) {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="embed-color">Color</Label>
-              <Input id="embed-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-11 w-20 p-1" />
+              <Input id="embed-color" type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-11 w-20 p-1" />/>
             </div>
           </div>
         ) : null}

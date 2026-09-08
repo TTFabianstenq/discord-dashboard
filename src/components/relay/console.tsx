@@ -34,51 +34,12 @@ export function Console() {
   const guilds = useRelay((s) => s.guilds);
   const mode = useRelay((s) => s.mode);
   const disconnect = useRelay((s) => s.disconnect);
-  const loadGuild = useRelay((s) => s.loadGuild);
   const rateLimit = useRelay((s) => s.rateLimit);
   const clearRateLimit = useRelay((s) => s.clearRateLimit);
   const [navOpen, setNavOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
 
   const guild = view.t === "guild" ? guilds.find((g) => g.id === view.id) : undefined;
-
-  const guildId = view.t === "guild" ? view.id : null;
-  const channelId = view.t === "guild" ? view.channelId : undefined;
-  const tab = view.t === "guild" ? view.tab : null;
-
-  // Load guild data once per server; auto-pick first text channel only when none selected.
-  // Depend on primitives — NOT the whole `view` object — or setView retriggers forever (React #185).
-  useEffect(() => {
-    if (!guildId || !tab) return;
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        await loadGuild(guildId);
-      } catch {
-        return;
-      }
-      if (cancelled) return;
-
-      // Already has a channel selection — do not touch view again.
-      if (channelId) return;
-
-      const list = useRelay.getState().channels[guildId] ?? [];
-      const first = list.find((c) => isTextLike(c.type));
-      if (!first) return;
-
-      // Re-check after await — user may have selected a channel in the meantime.
-      const current = useRelay.getState().view;
-      if (current.t === "guild" && current.id === guildId && current.channelId) return;
-
-      setView({ t: "guild", id: guildId, tab, channelId: first.id });
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [guildId, channelId, tab, loadGuild, setView]);
 
   useEffect(() => {
     if (!rateLimit) return;
@@ -214,6 +175,7 @@ export function Console() {
 function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const view = useRelay((s) => s.view);
   const setView = useRelay((s) => s.setView);
+  const openGuild = useRelay((s) => s.openGuild);
   const guilds = useRelay((s) => s.guilds);
 
   return (
@@ -245,8 +207,7 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
               <button
                 type="button"
                 onClick={() => {
-                  // Only set view — loadGuild runs from Console effect. Avoid double-fetch races.
-                  setView({ t: "guild", id: g.id, tab: "chat" });
+                  openGuild(g.id);
                   onNavigate();
                 }}
                 className={cn(
@@ -302,9 +263,10 @@ function GuildRail({
   channelId?: string;
   tab: GuildTab;
 }) {
-  const channels = useRelay((s) => s.channels[guildId] ?? []);
+  const channels = useRelay((s) => s.channels[guildId]);
   const guild = useRelay((s) => s.guilds.find((g) => g.id === guildId));
   const setView = useRelay((s) => s.setView);
+  const list = channels ?? [];
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -314,7 +276,7 @@ function GuildRail({
       </div>
       <div className="scroll-thin flex-1 overflow-y-auto p-2">
         <ChannelTree
-          channels={channels}
+          channels={list}
           activeId={channelId}
           onSelect={(ch) => {
             setView({

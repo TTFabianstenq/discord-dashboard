@@ -10,7 +10,7 @@ export function Overview() {
   const guilds = useRelay((s) => s.guilds);
   const mode = useRelay((s) => s.mode);
   const setView = useRelay((s) => s.setView);
-  const loadGuild = useRelay((s) => s.loadGuild);
+  const openGuild = useRelay((s) => s.openGuild);
 
   if (!bot) return null;
 
@@ -68,10 +68,7 @@ export function Overview() {
               <li key={g.id}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setView({ t: "guild", id: g.id, tab: "chat" });
-                    void loadGuild(g.id);
-                  }}
+                  onClick={() => openGuild(g.id)}
                   className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-stone/40"
                 >
                   <EntityAvatar
