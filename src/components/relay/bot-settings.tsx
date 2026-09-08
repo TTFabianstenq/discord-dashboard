@@ -5,20 +5,41 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { userAvatarUrl } from "@/lib/discord/cdn";
 import { fileToDataUri } from "@/lib/discord/format";
 import { inviteUrl, PERMISSIONS, permissionsToBits } from "@/lib/discord/permissions";
 import { useRelay } from "@/lib/discord/store";
+import { ACTIVITY_TYPES } from "@/lib/discord/types";
 import { EntityAvatar } from "./entity-avatar";
 
 const DEFAULT_PERMS = ["view", "send", "embed", "attach", "history", "manageMessages", "manageChannels"];
+
+const STATUSES = [
+  { value: "online", label: "Online" },
+  { value: "idle", label: "Idle" },
+  { value: "dnd", label: "Do Not Disturb" },
+  { value: "invisible", label: "Invisible" },
+] as const;
+
+const ACTIVITY_OPTIONS = [
+  { value: String(ACTIVITY_TYPES.PLAYING), label: "Playing" },
+  { value: String(ACTIVITY_TYPES.STREAMING), label: "Streaming" },
+  { value: String(ACTIVITY_TYPES.LISTENING), label: "Listening to" },
+  { value: String(ACTIVITY_TYPES.WATCHING), label: "Watching" },
+  { value: String(ACTIVITY_TYPES.COMPETING), label: "Competing in" },
+  { value: "none", label: "No activity" },
+];
 
 export function BotSettings() {
   const bot = useRelay((s) => s.bot);
   const application = useRelay((s) => s.application);
   const editBot = useRelay((s) => s.editBot);
   const editApplication = useRelay((s) => s.editApplication);
+  const setPresence = useRelay((s) => s.setPresence);
+  const presence = useRelay((s) => s.presence);
   const mode = useRelay((s) => s.mode);
+  const gatewayConnected = useRelay((s) => s.gatewayConnected);
   const [username, setUsername] = useState(bot?.username ?? "");
   const [description, setDescription] = useState(application?.description ?? "");
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -26,11 +47,26 @@ export function BotSettings() {
   const [perms, setPerms] = useState<string[]>(DEFAULT_PERMS);
   const [copied, setCopied] = useState(false);
 
+  const [status, setStatus] = useState<string>(presence?.status ?? "online");
+  const [activityType, setActivityType] = useState<string>(
+    presence?.activities?.[0] ? String(presence.activities[0].type) : "none",
+  );
+  const [activityName, setActivityName] = useState(presence?.activities?.[0]?.name ?? "");
+  const [streamUrl, setStreamUrl] = useState(presence?.activities?.[0]?.url ?? "https://twitch.tv/");
+  const [presenceSaving, setPresenceSaving] = useState(false);
+
   useEffect(() => {
     setUsername(bot?.username ?? "");
     setDescription(application?.description ?? "");
     setAvatar(null);
   }, [bot?.id, bot?.username, application?.description]);
+
+  useEffect(() => {
+    setStatus(presence?.status ?? "online");
+    setActivityType(presence?.activities?.[0] ? String(presence.activities[0].type) : "none");
+    setActivityName(presence?.activities?.[0]?.name ?? "");
+    if (presence?.activities?.[0]?.url) setStreamUrl(presence.activities[0].url);
+  }, [presence]);
 
   const clientId = application?.id || bot?.id || "";
   const url = useMemo(() => (clientId ? inviteUrl(clientId, permissionsToBits(perms)) : ""), [clientId, perms]);
@@ -56,6 +92,33 @@ export function BotSettings() {
       toast.error(err instanceof Error ? err.message : "Could not update bot");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function onSavePresence() {
+    setPresenceSaving(true);
+    try {
+      const activities =
+        activityType === "none" || !activityName.trim()
+          ? []
+          : [
+              {
+                name: activityName.trim(),
+                type: Number(activityType),
+                ...(Number(activityType) === ACTIVITY_TYPES.STREAMING
+                  ? { url: streamUrl.trim() || "https://twitch.tv/" }
+                  : {}),
+              },
+            ];
+      await setPresence({
+        status: status as "online" | "idle" | "dnd" | "invisible",
+        activities: activities.length ? activities : undefined,
+      });
+      toast.success(mode === "demo" ? "Presence updated (sample)" : "Presence sent to Discord");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update presence");
+    } finally {
+      setPresenceSaving(false);
     }
   }
 
@@ -107,6 +170,75 @@ export function BotSettings() {
       <Button onClick={() => void onSave()} disabled={saving || !username.trim()}>
         {saving ? "Saving…" : "Save profile"}
       </Button>
+
+      <section className="border-t border-border pt-8">
+        <h2 className="font-serif text-2xl tracking-tight">Status & activity</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {mode === "live"
+            ? gatewayConnected
+              ? "Gateway connected — presence updates go live while this tab stays open."
+              : "Connecting gateway… Keep this tab open for presence and voice to stay active."
+            : "Sample mode only updates the dashboard preview."}
+        </p>
+        <div className="mt-4 grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUSES.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Activity type</Label>
+            <Select value={activityType} onValueChange={setActivityType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTIVITY_OPTIONS.map((a) => (
+                  <SelectItem key={a.value} value={a.value}>
+                    {a.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {activityType !== "none" ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="activity-name">Activity name</Label>
+              <Input
+                id="activity-name"
+                value={activityName}
+                onChange={(e) => setActivityName(e.target.value)}
+                placeholder="Relay"
+                maxLength={128}
+              />
+            </div>
+          ) : null}
+          {activityType === String(ACTIVITY_TYPES.STREAMING) ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="stream-url">Stream URL (Twitch or YouTube)</Label>
+              <Input
+                id="stream-url"
+                value={streamUrl}
+                onChange={(e) => setStreamUrl(e.target.value)}
+                placeholder="https://twitch.tv/yourchannel"
+              />
+            </div>
+          ) : null}
+          <Button onClick={() => void onSavePresence()} disabled={presenceSaving}>
+            {presenceSaving ? "Updating…" : "Update presence"}
+          </Button>
+        </div>
+      </section>
 
       <section className="border-t border-border pt-8">
         <h2 className="font-serif text-2xl tracking-tight">Invite link</h2>
