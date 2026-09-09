@@ -275,7 +275,7 @@ export function ChannelManager({ guildId }: { guildId: string }) {
                   <Switch id="ch-nsfw" checked={draft.nsfw} onCheckedChange={(v) => setDraft({ ...draft, nsfw: v })} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="ch-slow">Slowmode ( (seconds)</Label>
+                  <Label htmlFor="ch-slow">Slowmode (seconds)</Label>
                   <Input
                     id="ch-slow"
                     type="number"
