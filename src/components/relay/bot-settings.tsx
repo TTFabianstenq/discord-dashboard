@@ -27,6 +27,7 @@ const ACTIVITY_OPTIONS = [
   { value: String(ACTIVITY_TYPES.STREAMING), label: "Streaming" },
   { value: String(ACTIVITY_TYPES.LISTENING), label: "Listening to" },
   { value: String(ACTIVITY_TYPES.WATCHING), label: "Watching" },
+  { value: String(ACTIVITY_TYPES.CUSTOM), label: "Custom status" },
   { value: String(ACTIVITY_TYPES.COMPETING), label: "Competing in" },
   { value: "none", label: "No activity" },
 ];
@@ -43,6 +44,7 @@ export function BotSettings() {
   const [username, setUsername] = useState(bot?.username ?? "");
   const [description, setDescription] = useState(application?.description ?? "");
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [perms, setPerms] = useState<string[]>(DEFAULT_PERMS);
   const [copied, setCopied] = useState(false);
@@ -59,6 +61,7 @@ export function BotSettings() {
     setUsername(bot?.username ?? "");
     setDescription(application?.description ?? "");
     setAvatar(null);
+    setBanner(null);
   }, [bot?.id, bot?.username, application?.description]);
 
   useEffect(() => {
@@ -79,6 +82,7 @@ export function BotSettings() {
       await editBot({
         username: username.trim(),
         ...(avatar ? { avatar } : {}),
+        ...(banner ? { banner } : {}),
       });
       if (application) {
         try {
@@ -98,18 +102,21 @@ export function BotSettings() {
   async function onSavePresence() {
     setPresenceSaving(true);
     try {
+      const type = Number(activityType);
       const activities =
         activityType === "none" || !activityName.trim()
           ? []
-          : [
-              {
-                name: activityName.trim(),
-                type: Number(activityType),
-                ...(Number(activityType) === ACTIVITY_TYPES.STREAMING
-                  ? { url: streamUrl.trim() || "https://twitch.tv/" }
-                  : {}),
-              },
-            ];
+          : type === ACTIVITY_TYPES.CUSTOM
+            ? [{ name: "Custom Status", type: ACTIVITY_TYPES.CUSTOM, state: activityName.trim() }]
+            : [
+                {
+                  name: activityName.trim(),
+                  type,
+                  ...(type === ACTIVITY_TYPES.STREAMING
+                    ? { url: streamUrl.trim() || "https://twitch.tv/" }
+                    : {}),
+                },
+              ];
       await setPresence({
         status: status as "online" | "idle" | "dnd" | "invisible",
         activities: activities.length ? activities : undefined,
@@ -130,13 +137,13 @@ export function BotSettings() {
         </p>
         <h1 className="mt-1 font-serif text-3xl tracking-tight">Bot profile</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Username changes can take a few minutes to show in Discord. Avatars apply immediately.
+          Username, avatar, and banner. Banner needs a bot that supports it (Discord may reject on some accounts).
         </p>
       </div>
 
       <div className="flex items-center gap-4">
         <EntityAvatar name={username || bot.username} id={bot.id} src={avatar ?? userAvatarUrl(bot, 256)} size="xl" />
-        <div>
+        <div className="flex flex-col gap-2">
           <Label htmlFor="bot-avatar" className="cursor-pointer text-sm text-stone hover:underline">
             Change avatar
           </Label>
@@ -155,7 +162,27 @@ export function BotSettings() {
               }
             }}
           />
-          <p className="mt-1 font-mono text-xs text-muted-foreground">{bot.id}</p>
+          <Label htmlFor="bot-banner" className="cursor-pointer text-sm text-stone hover:underline">
+            Change banner
+          </Label>
+          <input
+            id="bot-banner"
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              try {
+                setBanner(await fileToDataUri(file));
+                toast.message("Banner selected — click Save profile");
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Could not read image");
+              }
+            }}
+          />
+          <p className="font-mono text-xs text-muted-foreground">{bot.id}</p>
+          {banner ? <p className="text-xs text-muted-foreground">New banner ready to save</p> : null}
         </div>
       </div>
 
@@ -176,8 +203,8 @@ export function BotSettings() {
         <p className="mt-1 text-sm text-muted-foreground">
           {mode === "live"
             ? gatewayConnected
-              ? "Gateway connected — presence updates go live while this tab stays open."
-              : "Connecting gateway… Keep this tab open for presence and voice to stay active."
+              ? "Gateway connected — presence updates while this tab stays open."
+              : "Connecting gateway…"
             : "Sample mode only updates the dashboard preview."}
         </p>
         <div className="mt-4 grid gap-3">
@@ -213,25 +240,31 @@ export function BotSettings() {
           </div>
           {activityType !== "none" ? (
             <div className="grid gap-1.5">
-              <Label htmlFor="activity-name">Activity name</Label>
+              <Label htmlFor="activity-name">
+                {activityType === String(ACTIVITY_TYPES.CUSTOM) ? "Status text" : "Activity name"}
+              </Label>
               <Input
                 id="activity-name"
                 value={activityName}
                 onChange={(e) => setActivityName(e.target.value)}
-                placeholder="BotDeck"
+                placeholder={activityType === String(ACTIVITY_TYPES.CUSTOM) ? "grok is lowk peak" : "Managed by BotDeck"}
                 maxLength={128}
               />
             </div>
           ) : null}
           {activityType === String(ACTIVITY_TYPES.STREAMING) ? (
             <div className="grid gap-1.5">
-              <Label htmlFor="stream-url">Stream URL (Twitch or YouTube)</Label>
+              <Label htmlFor="stream-url">Stream URL</Label>
               <Input
                 id="stream-url"
                 value={streamUrl}
                 onChange={(e) => setStreamUrl(e.target.value)}
-                placeholder="https://twitch.tv/yourchannel"
+                placeholder="https://twitch.tv/channel or https://youtube.com/..."
               />
+              <p className="text-[11px] text-muted-foreground">
+                Discord only accepts <strong>Twitch or YouTube</strong> URLs for Streaming. Other links are rejected.
+                The "Watch" button text is controlled by Discord — bots cannot rename it.
+              </p>
             </div>
           ) : null}
           <Button onClick={() => void onSavePresence()} disabled={presenceSaving}>
@@ -242,9 +275,7 @@ export function BotSettings() {
 
       <section className="border-t border-border pt-8">
         <h2 className="font-serif text-2xl tracking-tight">Invite link</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Share this with anyone who should add the bot to a server. Permissions below are encoded in the URL.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Permissions below are encoded in the URL.</p>
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
           {PERMISSIONS.map((p) => {
             const on = perms.includes(p.key);
