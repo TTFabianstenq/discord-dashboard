@@ -25,7 +25,13 @@ type GatewayHandlers = {
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 const INTENTS = 0;
-const DEFAULT_PRESENCE: PresencePayload = { status: "online", activities: [], afk: false };
+
+/** Default when a bot connects through BotDeck. */
+const DEFAULT_PRESENCE: PresencePayload = {
+  status: "online",
+  activities: [{ name: "Managed by BotDeck", type: 0 }],
+  afk: false,
+};
 
 export class DiscordGateway {
   private ws: WebSocket | null = null;
@@ -36,7 +42,11 @@ export class DiscordGateway {
   private sessionId: string | null = null;
   private token: string;
   private handlers: GatewayHandlers;
-  private lastPresence: PresencePayload = { ...DEFAULT_PRESENCE };
+  private lastPresence: PresencePayload = {
+    status: DEFAULT_PRESENCE.status,
+    activities: [...(DEFAULT_PRESENCE.activities ?? [])],
+    afk: false,
+  };
   private intentionalClose = false;
   private reconnectAttempts = 0;
 
@@ -81,7 +91,6 @@ export class DiscordGateway {
               const d = packet.d as { session_id: string };
               this.sessionId = d.session_id;
               this.reconnectAttempts = 0;
-              // Always push online (or last chosen status) immediately after ready
               this.pushPresence();
               this.startPresenceRefresh();
               this.handlers.onReady?.();
@@ -267,8 +276,12 @@ export function ensureGateway(token: string, handlers?: GatewayHandlers): Discor
   if (singleton && singleton.connected) return singleton;
   singleton?.disconnect();
   singleton = new DiscordGateway(token, handlers ?? {});
-  // Default to online before identify
-  singleton.updatePresence({ status: "online", activities: [], afk: false });
+  // Playing Managed by BotDeck + online on every connect
+  singleton.updatePresence({
+    status: "online",
+    activities: [{ name: "Managed by BotDeck", type: 0 }],
+    afk: false,
+  });
   return singleton;
 }
 
