@@ -1,5 +1,5 @@
 {
-  "title": "App Relay",
+  "title": "BotDeck",
   "card": "custom",
-  "description": "A console for every Discord bot."
+  "description": "A console for every Discord bot. Connect with a token to send messages, edit channels, and run the bot."
 }
