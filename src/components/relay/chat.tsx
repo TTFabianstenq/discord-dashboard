@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Send, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, RefreshCw, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,7 @@ import { ChannelIcon } from "./channel-tree";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const EMPTY_CHANNELS: never[] = [];
+const POLL_MS = 3500;
 
 export function Chat({ guildId, channelId }: { guildId: string; channelId?: string }) {
   const channels = useRelay((s) => s.channels[guildId] ?? EMPTY_CHANNELS);
@@ -30,8 +31,14 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
   const textChannels = useMemo(() => list.filter((c) => isTextLike(c.type)), [list]);
   const channel = channelId ? list.find((c) => c.id === channelId) : undefined;
 
+  // Initial load + keep pulling so messages from other people show up
   useEffect(() => {
-    if (channelId) void loadMessages(channelId);
+    if (!channelId) return;
+    void loadMessages(channelId, true);
+    const timer = setInterval(() => {
+      void loadMessages(channelId, true);
+    }, POLL_MS);
+    return () => clearInterval(timer);
   }, [channelId, loadMessages]);
 
   if (!channelId || !channel) {
@@ -80,6 +87,15 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
             <p className="hidden truncate px-1 text-xs text-muted-foreground sm:block">{channel.topic}</p>
           ) : null}
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          aria-label="Refresh messages"
+          onClick={() => void loadMessages(channel.id, true)}
+        >
+          <RefreshCw className="size-4" />
+        </Button>
       </header>
       <MessageList channelId={channel.id} />
       <Composer channelId={channel.id} />
@@ -101,13 +117,22 @@ function MessageList({ channelId }: { channelId: string }) {
   const botId = useRelay((s) => s.bot?.id);
   const bottom = useRef<HTMLDivElement>(null);
   const list = messages ?? EMPTY_CHANNELS;
+  const stickBottom = useRef(true);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
+    if (stickBottom.current) {
+      bottom.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [list.length, channelId]);
 
   return (
-    <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-4 py-4">
+    <div
+      className="scroll-thin min-h-0 flex-1 overflow-y-auto px-4 py-4"
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      }}
+    >
       {list.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">No messages in this channel yet.</p>
       ) : (
@@ -253,6 +278,7 @@ function EmbedCard({ embed }: { embed: DiscordEmbed }) {
 
 function Composer({ channelId }: { channelId: string }) {
   const sendMessage = useRelay((s) => s.sendMessage);
+  const loadMessages = useRelay((s) => s.loadMessages);
   const [content, setContent] = useState("");
   const [embedOn, setEmbedOn] = useState(false);
   const [title, setTitle] = useState("");
@@ -272,6 +298,8 @@ function Composer({ channelId }: { channelId: string }) {
       setContent("");
       setTitle("");
       setDescription("");
+      // Pull latest so other people's messages appear right after you send
+      void loadMessages(channelId, true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not send");
     } finally {
