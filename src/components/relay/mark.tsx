@@ -18,7 +18,7 @@ export function RelayWordmark({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       <RelayMark className="size-6" />
-      <span className="font-serif text-lg tracking-tight">Botdeck</span>
+      <span className="font-serif text-lg tracking-tight">Fabianbotdeck</span>
     </span>
   );
 }
