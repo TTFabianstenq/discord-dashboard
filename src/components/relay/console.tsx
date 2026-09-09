@@ -12,18 +12,22 @@ import { BotSettings } from "./bot-settings";
 import { ChannelManager } from "./channel-manager";
 import { ChannelTree } from "./channel-tree";
 import { Chat } from "./chat";
+import { CommandManager } from "./command-manager";
 import { EntityAvatar } from "./entity-avatar";
 import { MembersPanel } from "./members-panel";
 import { RelayMark } from "./mark";
 import { Overview } from "./overview";
 import { RoleManager } from "./role-manager";
 import { ServerSettings } from "./server-settings";
+import { WebhookManager } from "./webhook-manager";
 
 const TABS: { id: GuildTab; label: string }[] = [
   { id: "chat", label: "Chat" },
   { id: "channels", label: "Channels" },
   { id: "roles", label: "Roles" },
   { id: "members", label: "Members" },
+  { id: "webhooks", label: "Webhooks" },
+  { id: "commands", label: "Commands" },
   { id: "server", label: "Server" },
 ];
 
@@ -76,7 +80,7 @@ export function Console() {
         </Button>
         <span className="inline-flex items-center gap-2">
           <RelayMark className="size-5" />
-          <span className="font-serif text-base">Fabianbotdeck</span>
+          <span className="font-serif text-base">BotDeck</span>
         </span>
         {mode === "demo" ? (
           <span className="hidden rounded-full bg-stone/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone sm:inline">
@@ -157,6 +161,8 @@ export function Console() {
               {view.tab === "channels" ? <ChannelManager guildId={guild.id} /> : null}
               {view.tab === "roles" ? <RoleManager guildId={guild.id} /> : null}
               {view.tab === "members" ? <MembersPanel guildId={guild.id} /> : null}
+              {view.tab === "webhooks" ? <WebhookManager guildId={guild.id} /> : null}
+              {view.tab === "commands" ? <CommandManager guildId={guild.id} /> : null}
               {view.tab === "server" ? <ServerSettings guildId={guild.id} /> : null}
             </>
           ) : null}
