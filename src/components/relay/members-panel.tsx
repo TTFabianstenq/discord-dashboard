@@ -33,14 +33,17 @@ import { userAvatarUrl } from "@/lib/discord/cdn";
 import { formatRelative } from "@/lib/discord/format";
 import { canBan, canKick, canModerate } from "@/lib/discord/permissions";
 import { useRelay } from "@/lib/discord/store";
-import type { DiscordMember } from "@/lib/discord/types";
+import type { DiscordMember, DiscordRole } from "@/lib/discord/types";
 import { EntityAvatar } from "./entity-avatar";
+
+const EMPTY_MEMBERS: DiscordMember[] = [];
+const EMPTY_ROLES: DiscordRole[] = [];
 
 type Action = "kick" | "ban" | "timeout" | "untimeout" | null;
 
 export function MembersPanel({ guildId }: { guildId: string }) {
-  const members = useRelay((s) => s.members[guildId] ?? []);
-  const roles = useRelay((s) => s.roles[guildId] ?? []);
+  const members = useRelay((s) => s.members[guildId] ?? EMPTY_MEMBERS);
+  const roles = useRelay((s) => s.roles[guildId] ?? EMPTY_ROLES);
   const guild = useRelay((s) => s.guilds.find((g) => g.id === guildId));
   const botId = useRelay((s) => s.bot?.id);
   const mode = useRelay((s) => s.mode);

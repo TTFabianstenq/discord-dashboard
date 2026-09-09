@@ -28,6 +28,8 @@ import { intToHex, hexToInt } from "@/lib/discord/format";
 import { useRelay } from "@/lib/discord/store";
 import type { DiscordRole } from "@/lib/discord/types";
 
+const EMPTY: DiscordRole[] = [];
+
 type Draft = {
   name: string;
   color: string;
@@ -43,7 +45,7 @@ const emptyDraft: Draft = {
 };
 
 export function RoleManager({ guildId }: { guildId: string }) {
-  const roles = useRelay((s) => s.roles[guildId] ?? []);
+  const roles = useRelay((s) => s.roles[guildId] ?? EMPTY);
   const guild = useRelay((s) => s.guilds.find((g) => g.id === guildId));
   const createRole = useRelay((s) => s.createRole);
   const editRole = useRelay((s) => s.editRole);

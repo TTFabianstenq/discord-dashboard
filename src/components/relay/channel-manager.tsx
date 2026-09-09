@@ -30,6 +30,8 @@ import { channelKindLabel } from "@/lib/discord/format";
 import { useRelay } from "@/lib/discord/store";
 import { ChannelIcon, sortChannels } from "./channel-tree";
 
+const EMPTY: DiscordChannel[] = [];
+
 const CREATE_TYPES = [
   { value: String(CHANNEL_TYPES.GUILD_TEXT), label: "Text" },
   { value: String(CHANNEL_TYPES.GUILD_VOICE), label: "Voice" },
@@ -61,7 +63,7 @@ function isVoiceLike(type: number) {
 }
 
 export function ChannelManager({ guildId }: { guildId: string }) {
-  const channels = useRelay((s) => s.channels[guildId] ?? []);
+  const channels = useRelay((s) => s.channels[guildId] ?? EMPTY);
   const createChannel = useRelay((s) => s.createChannel);
   const editChannel = useRelay((s) => s.editChannel);
   const deleteChannel = useRelay((s) => s.deleteChannel);
