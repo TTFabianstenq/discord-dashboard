@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getGateway } from "@/lib/discord/gateway";
 import { CHANNEL_TYPES } from "@/lib/discord/types";
 import { useRelay } from "@/lib/discord/store";
 
@@ -39,9 +40,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     setBusy(true);
     try {
       await joinVoice(guildId, id);
-      // re-send with mute/deaf flags via a second state update path
-      const gw = (await import("@/lib/discord/gateway")).getGateway();
-      gw?.updateVoiceState(guildId, id, selfMute, selfDeaf);
+      getGateway()?.updateVoiceState(guildId, id, selfMute, selfDeaf);
       toast.success(
         mode === "demo"
           ? "Joined voice (sample — not on Discord)"
@@ -71,11 +70,8 @@ export function VoicePanel({ guildId }: { guildId: string }) {
       toast.message("Join a channel first");
       return;
     }
-    const gw = (require as unknown as undefined) // keep types happy in editor
-    void import("@/lib/discord/gateway").then(({ getGateway }) => {
-      getGateway()?.updateVoiceState(guildId, voiceChannelId, selfMute, selfDeaf);
-      toast.success("Mute / deaf flags sent");
-    });
+    getGateway()?.updateVoiceState(guildId, voiceChannelId, selfMute, selfDeaf);
+    toast.success("Mute / deaf flags sent");
   }
 
   return (
@@ -86,8 +82,8 @@ export function VoicePanel({ guildId }: { guildId: string }) {
           <h3 className="font-medium">Voice</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             The bot can <strong className="font-medium text-foreground">join and leave</strong> voice channels
-            while this tab stays open (gateway).
-            It <strong className="font-medium text-foreground">cannot stream mic audio or TTS</strong> from this
+            while this tab stays open (gateway). It{" "}
+            <strong className="font-medium text-foreground">cannot stream mic audio or TTS</strong> from this
             dashboard — that needs a separate always-on voice process, not a Vercel website.
           </p>
         </div>
@@ -145,9 +141,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
           type="button"
           size="sm"
           variant={selfMute ? "secondary" : "outline"}
-          onClick={() => {
-            setSelfMute((v) => !v);
-          }}
+          onClick={() => setSelfMute((v) => !v)}
         >
           {selfMute ? <MicOff className="size-4" /> : <Mic className="size-4" />}
           {selfMute ? "Muted" : "Unmuted"}
