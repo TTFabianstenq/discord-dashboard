@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Headphones, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,11 +56,17 @@ const emptyDraft: Draft = {
   rate_limit_per_user: 0,
 };
 
+function isVoiceLike(type: number) {
+  return type === CHANNEL_TYPES.GUILD_VOICE || type === CHANNEL_TYPES.GUILD_STAGE_VOICE;
+}
+
 export function ChannelManager({ guildId }: { guildId: string }) {
   const channels = useRelay((s) => s.channels[guildId] ?? []);
   const createChannel = useRelay((s) => s.createChannel);
   const editChannel = useRelay((s) => s.editChannel);
   const deleteChannel = useRelay((s) => s.deleteChannel);
+  const joinVoice = useRelay((s) => s.joinVoice);
+  const voiceChannelId = useRelay((s) => s.voiceChannelId);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<DiscordChannel | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -121,7 +127,9 @@ export function ChannelManager({ guildId }: { guildId: string }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-serif text-2xl tracking-tight">Channels</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Create, rename, move, or delete channels in this server.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Create, rename, move, or delete channels. Voice rows have a Join button (bot appears in VC; no audio from this site).
+          </p>
         </div>
         <Button onClick={startCreate}>
           <Plus className="size-4" />
@@ -144,6 +152,9 @@ export function ChannelManager({ guildId }: { guildId: string }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
                   {ch.type === CHANNEL_TYPES.GUILD_CATEGORY ? ch.name?.toUpperCase() : ch.name}
+                  {voiceChannelId === ch.id ? (
+                    <span className="ml-2 text-xs font-normal text-stone">· in channel</span>
+                  ) : null}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {channelKindLabel(ch.type)}
@@ -154,6 +165,23 @@ export function ChannelManager({ guildId }: { guildId: string }) {
                   {ch.rate_limit_per_user ? ` · slowmode ${ch.rate_limit_per_user}s` : ""}
                 </p>
               </div>
+              {isVoiceLike(ch.type) ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await joinVoice(guildId, ch.id);
+                      toast.success("Joined voice — keep the tab open");
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Could not join");
+                    }
+                  }}
+                >
+                  <Headphones className="size-4" />
+                  Join
+                </Button>
+              ) : null}
               <Button variant="ghost" size="icon-sm" onClick={() => startEdit(ch)} aria-label="Edit channel">
                 <Pencil className="size-4" />
               </Button>
@@ -247,7 +275,7 @@ export function ChannelManager({ guildId }: { guildId: string }) {
                   <Switch id="ch-nsfw" checked={draft.nsfw} onCheckedChange={(v) => setDraft({ ...draft, nsfw: v })} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="ch-slow">Slowmode (seconds)</Label>
+                  <Label htmlFor="ch-slow">Slowmode ( (seconds)</Label>
                   <Input
                     id="ch-slow"
                     type="number"
