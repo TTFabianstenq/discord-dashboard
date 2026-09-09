@@ -144,6 +144,30 @@ export type DiscordPresenceUpdate = {
   }[];
 };
 
+export type DiscordBan = {
+  reason: string | null;
+  user: DiscordUser;
+};
+
+export type DiscordInvite = {
+  code: string;
+  channel?: { id: string; name?: string };
+  max_age?: number;
+  max_uses?: number;
+  temporary?: boolean;
+  url?: string;
+  approximate_member_count?: number;
+};
+
+export type DiscordAuditLogEntry = {
+  id: string;
+  action_type: number;
+  user_id?: string | null;
+  target_id?: string | null;
+  reason?: string | null;
+  created_at?: string;
+};
+
 export const CHANNEL_TYPES = {
   GUILD_TEXT: 0,
   DM: 1,
@@ -171,7 +195,17 @@ export const ACTIVITY_TYPES = {
   COMPETING: 5,
 } as const;
 
-export type GuildTab = "chat" | "channels" | "roles" | "members" | "webhooks" | "commands" | "server";
+export type GuildTab =
+  | "chat"
+  | "channels"
+  | "roles"
+  | "members"
+  | "bans"
+  | "invites"
+  | "audit"
+  | "webhooks"
+  | "commands"
+  | "server";
 
 export type AppView =
   | { t: "overview" }
