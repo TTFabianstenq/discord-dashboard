@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Fabianbotdeck";
+const APP_NAME = "BotDeck";
 
 export const Route = createRootRoute({
   head: () => ({

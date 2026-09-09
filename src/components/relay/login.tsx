@@ -45,7 +45,7 @@ export function LoginScreen() {
       <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-10">
         <span className="inline-flex items-center gap-2.5">
           <RelayMark className="size-7" />
-          <span className="font-serif text-xl tracking-tight">Fabianbotdeck</span>
+          <span className="font-serif text-xl tracking-tight">BotDeck</span>
         </span>
         <p className="hidden text-xs text-muted-foreground sm:block">Anyone with a bot token can use this.</p>
       </header>
@@ -57,15 +57,14 @@ export function LoginScreen() {
             A console for every Discord bot.
           </h1>
           <p className="mt-5 max-w-md text-base leading-relaxed text-muted-foreground">
-            Paste a bot token to send messages, edit channels, and run the bot from the browser. Each visitor
-            connects their own bot — sessions never mix, and tokens are not saved on a server.
+            Paste a bot token to send messages, edit channels, manage roles, webhooks, slash commands, and more.
           </p>
           <ul className="mt-8 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
             {[
               "Send and edit messages as the bot",
               "Create, rename, and delete channels",
-              "Update the bot username and avatar",
-              "Invite the bot with the permissions you pick",
+              "Webhooks and slash commands",
+              "Status, activity, and voice join",
             ].map((item) => (
               <li key={item} className="flex items-start gap-2.5">
                 <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-stone" />
@@ -134,7 +133,7 @@ export function LoginScreen() {
             <div className="flex items-start gap-2 rounded-md bg-secondary/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <Shield className="mt-0.5 size-3.5 shrink-0 text-stone" />
               <span>
-                The token stays in this browser tab and is sent only to Discord through Fabianbotdeck. Close the tab to
+                The token stays in this browser tab and is sent only to Discord through BotDeck. Close the tab to
                 forget it. Anyone else can open this same page and connect a different bot.
               </span>
             </div>
