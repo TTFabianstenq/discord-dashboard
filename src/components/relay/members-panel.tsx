@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MoreHorizontal, ShieldOff, UserX, Ban, Clock } from "lucide-react";
+import { MoreHorizontal, ShieldOff, UserX, Ban, Clock, UserCog, MicOff, Headphones } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,7 @@ import { EntityAvatar } from "./entity-avatar";
 const EMPTY_MEMBERS: DiscordMember[] = [];
 const EMPTY_ROLES: DiscordRole[] = [];
 
-type Action = "kick" | "ban" | "timeout" | "untimeout" | null;
+type Action = "kick" | "ban" | "timeout" | "untimeout" | "nick" | "roles" | "mute" | "deaf" | null;
 
 export function MembersPanel({ guildId }: { guildId: string }) {
   const members = useRelay((s) => s.members[guildId] ?? EMPTY_MEMBERS);
@@ -50,22 +50,30 @@ export function MembersPanel({ guildId }: { guildId: string }) {
   const kickMember = useRelay((s) => s.kickMember);
   const banMember = useRelay((s) => s.banMember);
   const timeoutMember = useRelay((s) => s.timeoutMember);
+  const editMember = useRelay((s) => s.editMember);
 
   const [target, setTarget] = useState<DiscordMember | null>(null);
   const [action, setAction] = useState<Action>(null);
   const [reason, setReason] = useState("");
   const [timeoutMinutes, setTimeoutMinutes] = useState(60);
+  const [nick, setNick] = useState("");
+  const [roleIds, setRoleIds] = useState<string[]>([]);
 
   const perms = guild?.permissions;
   const allowKick = mode === "demo" || canKick(perms);
   const allowBan = mode === "demo" || canBan(perms);
   const allowTimeout = mode === "demo" || canModerate(perms);
+  const allowManage = mode === "demo" || canModerate(perms);
+
+  const assignableRoles = roles.filter((r) => r.name !== "@everyone" && !r.managed);
 
   function openAction(m: DiscordMember, a: Action) {
     setTarget(m);
     setAction(a);
     setReason("");
     setTimeoutMinutes(60);
+    setNick(m.nick ?? "");
+    setRoleIds([...m.roles]);
   }
 
   async function confirm() {
@@ -81,10 +89,22 @@ export function MembersPanel({ guildId }: { guildId: string }) {
       } else if (action === "timeout") {
         const until = new Date(Date.now() + timeoutMinutes * 60_000).toISOString();
         await timeoutMember(guildId, userId, until, reason || undefined);
-        toast.success(`Timed out ${target.user.username} for ${timeoutMinutes}m`);
+        toast.success(`Timed out ${target.user.username}`);
       } else if (action === "untimeout") {
         await timeoutMember(guildId, userId, null);
-        toast.success(`Removed timeout from ${target.user.username}`);
+        toast.success(`Removed timeout`);
+      } else if (action === "nick") {
+        await editMember(guildId, userId, { nick: nick.trim() || null });
+        toast.success("Nickname updated");
+      } else if (action === "roles") {
+        await editMember(guildId, userId, { roles: roleIds });
+        toast.success("Roles updated");
+      } else if (action === "mute") {
+        await editMember(guildId, userId, { mute: true });
+        toast.success("Server muted");
+      } else if (action === "deaf") {
+        await editMember(guildId, userId, { deaf: true });
+        toast.success("Server deafened");
       }
       setAction(null);
       setTarget(null);
@@ -99,9 +119,9 @@ export function MembersPanel({ guildId }: { guildId: string }) {
         <h2 className="font-serif text-2xl tracking-tight">Members</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {members.length > 0
-            ? `${members.length} loaded`
+            ? `${members.length} loaded — nick, roles, server mute/deafen, kick, ban, timeout`
             : mode === "live"
-              ? "The Server Members Intent must be enabled on this bot to list people."
+              ? "Enable Server Members Intent on the bot to list people."
               : "No members in this sample roster."}
         </p>
       </div>
@@ -127,9 +147,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">
                     {m.nick || u.global_name || u.username}
-                    {u.bot ? (
-                      <span className="ml-2 text-[10px] uppercase tracking-wide text-stone">Bot</span>
-                    ) : null}
+                    {u.bot ? <span className="ml-2 text-[10px] uppercase tracking-wide text-stone">Bot</span> : null}
                     {timedOut ? (
                       <span className="ml-2 text-[10px] uppercase tracking-wide text-destructive">Timed out</span>
                     ) : null}
@@ -140,7 +158,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                     {m.joined_at ? ` · joined ${formatRelative(m.joined_at)}` : ""}
                   </p>
                 </div>
-                {!isSelf && !u.bot ? (
+                {!isSelf ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon-sm" aria-label="Member actions">
@@ -148,6 +166,27 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {allowManage ? (
+                        <>
+                          <DropdownMenuItem onClick={() => openAction(m, "nick")}>
+                            <UserCog className="size-4" />
+                            Nickname
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openAction(m, "roles")}>
+                            <UserCog className="size-4" />
+                            Roles
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openAction(m, "mute")}>
+                            <MicOff className="size-4" />
+                            Server mute
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openAction(m, "deaf")}>
+                            <Headphones className="size-4" />
+                            Server deafen
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      ) : null}
                       {allowTimeout ? (
                         timedOut ? (
                           <DropdownMenuItem onClick={() => openAction(m, "untimeout")}>
@@ -176,9 +215,6 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                           </DropdownMenuItem>
                         </>
                       ) : null}
-                      {!allowKick && !allowBan && !allowTimeout ? (
-                        <DropdownMenuItem disabled>Missing moderation permissions</DropdownMenuItem>
-                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : null}
@@ -189,7 +225,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
       )}
 
       <Dialog
-        open={action === "timeout" || action === "kick" || action === "ban"}
+        open={action === "timeout" || action === "kick" || action === "ban" || action === "nick" || action === "roles"}
         onOpenChange={(o) => {
           if (!o) {
             setAction(null);
@@ -203,13 +239,15 @@ export function MembersPanel({ guildId }: { guildId: string }) {
               {action === "kick" && `Kick ${target?.user?.username}?`}
               {action === "ban" && `Ban ${target?.user?.username}?`}
               {action === "timeout" && `Timeout ${target?.user?.username}?`}
+              {action === "nick" && `Nickname for ${target?.user?.username}`}
+              {action === "roles" && `Roles for ${target?.user?.username}`}
             </DialogTitle>
             <DialogDescription>
-              {action === "ban"
-                ? "They will not be able to rejoin until unbanned."
-                : action === "kick"
-                  ? "They can rejoin with a new invite."
-                  : "They cannot send messages or join voice until the timeout ends."}
+              {action === "roles"
+                ? "Toggle roles. Managed roles (bots/integrations) are hidden."
+                : action === "nick"
+                  ? "Leave empty to clear the nickname."
+                  : "Confirm this moderation action."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
@@ -226,25 +264,46 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                 />
               </div>
             ) : null}
-            <div className="grid gap-1.5">
-              <Label htmlFor="mod-reason">Reason (optional)</Label>
-              <Input id="mod-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={512} />
-            </div>
+            {action === "nick" ? (
+              <div className="grid gap-1.5">
+                <Label htmlFor="mem-nick">Nickname</Label>
+                <Input id="mem-nick" value={nick} onChange={(e) => setNick(e.target.value)} maxLength={32} />
+              </div>
+            ) : null}
+            {action === "roles" ? (
+              <ul className="max-h-60 space-y-1 overflow-y-auto">
+                {assignableRoles.map((r) => {
+                  const on = roleIds.includes(r.id);
+                  return (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRoleIds((cur) => (on ? cur.filter((id) => id !== r.id) : [...cur, r.id]))
+                        }
+                        className={`flex w-full items-center rounded-md border px-3 py-2 text-left text-sm ${
+                          on ? "border-stone/50 bg-stone/10" : "border-border"
+                        }`}
+                      >
+                        {r.name}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            {action === "timeout" || action === "kick" || action === "ban" ? (
+              <div className="grid gap-1.5">
+                <Label htmlFor="mod-reason">Reason (optional)</Label>
+                <Input id="mod-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={512} />
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setAction(null);
-                setTarget(null);
-              }}
-            >
+            <Button variant="outline" onClick={() => { setAction(null); setTarget(null); }}>
               Cancel
             </Button>
-            <Button
-              variant={action === "ban" ? "destructive" : "default"}
-              onClick={() => void confirm()}
-            >
+            <Button variant={action === "ban" ? "destructive" : "default"} onClick={() => void confirm()}>
               Confirm
             </Button>
           </DialogFooter>
@@ -252,7 +311,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
       </Dialog>
 
       <AlertDialog
-        open={action === "untimeout"}
+        open={action === "untimeout" || action === "mute" || action === "deaf"}
         onOpenChange={(o) => {
           if (!o) {
             setAction(null);
@@ -262,12 +321,20 @@ export function MembersPanel({ guildId }: { guildId: string }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove timeout from {target?.user?.username}?</AlertDialogTitle>
-            <AlertDialogDescription>They will be able to chat and join voice again immediately.</AlertDialogDescription>
+            <AlertDialogTitle>
+              {action === "untimeout" && `Remove timeout from ${target?.user?.username}?`}
+              {action === "mute" && `Server mute ${target?.user?.username}?`}
+              {action === "deaf" && `Server deafen ${target?.user?.username}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {action === "mute" || action === "deaf"
+                ? "This is a server-wide voice flag (not the bot self-mute). Needs Mute Members / Deafen Members."
+                : "They can chat again immediately."}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirm()}>Remove timeout</AlertDialogAction>
+            <AlertDialogAction onClick={() => void confirm()}>Confirm</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
