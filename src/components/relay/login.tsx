@@ -45,7 +45,7 @@ export function LoginScreen() {
       <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-10">
         <span className="inline-flex items-center gap-2.5">
           <RelayMark className="size-7" />
-          <span className="font-serif text-xl tracking-tight">Relay</span>
+          <span className="font-serif text-xl tracking-tight">Botdeck</span>
         </span>
         <p className="hidden text-xs text-muted-foreground sm:block">Anyone with a bot token can use this.</p>
       </header>
@@ -134,7 +134,7 @@ export function LoginScreen() {
             <div className="flex items-start gap-2 rounded-md bg-secondary/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <Shield className="mt-0.5 size-3.5 shrink-0 text-stone" />
               <span>
-                The token stays in this browser tab and is sent only to Discord through Relay. Close the tab to
+                The token stays in this browser tab and is sent only to Discord through Botdeck. Close the tab to
                 forget it. Anyone else can open this same page and connect a different bot.
               </span>
             </div>
