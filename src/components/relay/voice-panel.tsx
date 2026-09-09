@@ -8,8 +8,10 @@ import { getGateway } from "@/lib/discord/gateway";
 import { CHANNEL_TYPES } from "@/lib/discord/types";
 import { useRelay } from "@/lib/discord/store";
 
+const EMPTY: never[] = [];
+
 export function VoicePanel({ guildId }: { guildId: string }) {
-  const channels = useRelay((s) => s.channels[guildId] ?? []);
+  const channels = useRelay((s) => s.channels[guildId] ?? EMPTY);
   const voiceChannelId = useRelay((s) => s.voiceChannelId);
   const joinVoice = useRelay((s) => s.joinVoice);
   const leaveVoice = useRelay((s) => s.leaveVoice);
@@ -24,15 +26,16 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     [channels],
   );
 
-  const [selected, setSelected] = useState(voiceChannels[0]?.id ?? "");
+  const [selected, setSelected] = useState("");
   const [selfMute, setSelfMute] = useState(false);
   const [selfDeaf, setSelfDeaf] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const active = voiceChannels.find((c) => c.id === voiceChannelId);
+  const selectValue = selected || voiceChannels[0]?.id || "";
 
   async function onJoin() {
-    const id = selected || voiceChannels[0]?.id;
+    const id = selectValue;
     if (!id) {
       toast.error("No voice channel in this server");
       return;
@@ -107,7 +110,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
         <div className="grid gap-1.5">
           <Label>Channel</Label>
           <Select
-            value={selected || voiceChannels[0]?.id || ""}
+            value={selectValue}
             onValueChange={setSelected}
             disabled={voiceChannels.length === 0}
           >

@@ -20,12 +20,14 @@ import { EntityAvatar } from "./entity-avatar";
 import { ChannelIcon } from "./channel-tree";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+const EMPTY_CHANNELS: never[] = [];
+
 export function Chat({ guildId, channelId }: { guildId: string; channelId?: string }) {
-  const channels = useRelay((s) => s.channels[guildId]);
+  const channels = useRelay((s) => s.channels[guildId] ?? EMPTY_CHANNELS);
   const loadMessages = useRelay((s) => s.loadMessages);
   const setView = useRelay((s) => s.setView);
-  const list = channels ?? [];
-  const textChannels = list.filter((c) => isTextLike(c.type));
+  const list = channels;
+  const textChannels = useMemo(() => list.filter((c) => isTextLike(c.type)), [list]);
   const channel = channelId ? list.find((c) => c.id === channelId) : undefined;
 
   useEffect(() => {
@@ -98,7 +100,7 @@ function MessageList({ channelId }: { channelId: string }) {
   const messages = useRelay((s) => s.messages[channelId]);
   const botId = useRelay((s) => s.bot?.id);
   const bottom = useRef<HTMLDivElement>(null);
-  const list = messages ?? [];
+  const list = messages ?? EMPTY_CHANNELS;
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
@@ -111,7 +113,7 @@ function MessageList({ channelId }: { channelId: string }) {
       ) : (
         <ul className="flex flex-col gap-4">
           {list.map((m) => (
-            <MessageRow key={m.id} message={m} mine={m.author.id === botId} />
+            <MessageRow key={m.id} message={m as DiscordMessage} mine={(m as DiscordMessage).author.id === botId} />
           ))}
         </ul>
       )}

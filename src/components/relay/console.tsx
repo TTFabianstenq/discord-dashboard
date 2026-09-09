@@ -21,6 +21,8 @@ import { RoleManager } from "./role-manager";
 import { ServerSettings } from "./server-settings";
 import { WebhookManager } from "./webhook-manager";
 
+const EMPTY: never[] = [];
+
 const TABS: { id: GuildTab; label: string }[] = [
   { id: "chat", label: "Chat" },
   { id: "channels", label: "Channels" },
@@ -269,10 +271,10 @@ function GuildRail({
   channelId?: string;
   tab: GuildTab;
 }) {
-  const channels = useRelay((s) => s.channels[guildId]);
+  const channels = useRelay((s) => s.channels[guildId] ?? EMPTY);
   const guild = useRelay((s) => s.guilds.find((g) => g.id === guildId));
   const setView = useRelay((s) => s.setView);
-  const list = channels ?? [];
+  const list = channels;
 
   return (
     <div className="flex h-full w-full flex-col">

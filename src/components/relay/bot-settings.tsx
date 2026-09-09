@@ -218,7 +218,7 @@ export function BotSettings() {
                 id="activity-name"
                 value={activityName}
                 onChange={(e) => setActivityName(e.target.value)}
-                placeholder="Relay"
+                placeholder="BotDeck"
                 maxLength={128}
               />
             </div>

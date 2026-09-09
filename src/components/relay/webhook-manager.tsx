@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Copy, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,9 +27,11 @@ import { isTextLike } from "@/lib/discord/format";
 import { useRelay } from "@/lib/discord/store";
 import type { DiscordWebhook } from "@/lib/discord/types";
 
+const EMPTY: never[] = [];
+
 export function WebhookManager({ guildId }: { guildId: string }) {
-  const channels = useRelay((s) => s.channels[guildId] ?? []);
-  const webhooks = useRelay((s) => s.webhooks[guildId] ?? []);
+  const channels = useRelay((s) => s.channels[guildId] ?? EMPTY);
+  const webhooks = useRelay((s) => s.webhooks[guildId] ?? EMPTY);
   const loadWebhooks = useRelay((s) => s.loadWebhooks);
   const createWebhook = useRelay((s) => s.createWebhook);
   const deleteWebhook = useRelay((s) => s.deleteWebhook);
@@ -40,7 +42,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
   const [pendingDelete, setPendingDelete] = useState<DiscordWebhook | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const textChannels = channels.filter((c) => isTextLike(c.type));
+  const textChannels = useMemo(() => channels.filter((c) => isTextLike(c.type)), [channels]);
 
   useEffect(() => {
     void loadWebhooks(guildId);
@@ -58,7 +60,6 @@ export function WebhookManager({ guildId }: { guildId: string }) {
     setBusy(true);
     try {
       const created = await createWebhook(channelId, name.trim());
-      // ensure list reflects create
       useRelay.setState((s) => ({
         webhooks: {
           ...s.webhooks,
@@ -98,25 +99,26 @@ export function WebhookManager({ guildId }: { guildId: string }) {
       ) : (
         <ul className="overflow-hidden rounded-xl border border-border">
           {webhooks.map((w) => {
-            const ch = channels.find((c) => c.id === w.channel_id);
+            const wh = w as DiscordWebhook;
+            const ch = channels.find((c) => c.id === wh.channel_id);
             return (
-              <li key={w.id} className="flex items-center gap-3 border-b border-border px-3 py-2.5 last:border-b-0">
+              <li key={wh.id} className="flex items-center gap-3 border-b border-border px-3 py-2.5 last:border-b-0">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{w.name || "Webhook"}</p>
+                  <p className="truncate text-sm font-medium">{wh.name || "Webhook"}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    #{ch?.name ?? w.channel_id}
-                    {w.application_id ? " · app-owned" : ""}
+                    #{ch?.name ?? wh.channel_id}
+                    {wh.application_id ? " · app-owned" : ""}
                   </p>
                 </div>
-                {w.url || w.token ? (
+                {wh.url || wh.token ? (
                   <Button
                     variant="ghost"
                     size="icon-sm"
                     aria-label="Copy webhook URL"
                     onClick={async () => {
                       const url =
-                        w.url ||
-                        (w.token ? `https://discord.com/api/webhooks/${w.id}/${w.token}` : "");
+                        wh.url ||
+                        (wh.token ? `https://discord.com/api/webhooks/${wh.id}/${wh.token}` : "");
                       if (!url) {
                         toast.error("No URL available");
                         return;
@@ -136,7 +138,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Delete webhook"
-                  onClick={() => setPendingDelete(w)}
+                  onClick={() => setPendingDelete(wh)}
                 >
                   <Trash2 className="size-4" />
                 </Button>
