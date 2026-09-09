@@ -8,6 +8,7 @@ import { guildIconUrl } from "@/lib/discord/cdn";
 import { fileToDataUri } from "@/lib/discord/format";
 import { useRelay } from "@/lib/discord/store";
 import { EntityAvatar } from "./entity-avatar";
+import { VoicePanel } from "./voice-panel";
 
 export function ServerSettings({ guildId }: { guildId: string }) {
   const guild = useRelay((s) => s.guilds.find((g) => g.id === guildId));
@@ -47,6 +48,9 @@ export function ServerSettings({ guildId }: { guildId: string }) {
         <h2 className="font-serif text-2xl tracking-tight">Server</h2>
         <p className="mt-1 text-sm text-muted-foreground">Rename this server, change its icon, or update the description.</p>
       </div>
+
+      <VoicePanel guildId={guildId} />
+
       <div className="flex items-center gap-4">
         <EntityAvatar name={name || guild.name} id={guild.id} src={icon ?? guildIconUrl(guild, 256)} size="xl" rounded="lg" />
         <div>
