@@ -1,4 +1,5 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Toaster } from "@/components/ui/sonner";
@@ -46,6 +47,7 @@ export const Route = createRootRoute({
           </TooltipProvider>
         </AuthProvider>
         <Scripts />
+        <SpeedInsights />
       </body>
     </html>
   ),
