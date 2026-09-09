@@ -27,10 +27,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useRelay } from "@/lib/discord/store";
 import { COMMAND_TYPES, type DiscordApplicationCommand } from "@/lib/discord/types";
 
+const EMPTY_COMMANDS: DiscordApplicationCommand[] = [];
+
 export function CommandManager({ guildId }: { guildId: string }) {
   const mode = useRelay((s) => s.mode);
   const application = useRelay((s) => s.application);
-  const guildCommands = useRelay((s) => s.commands.guild[guildId] ?? []);
+  const guildCommands = useRelay((s) => s.commands.guild[guildId] ?? EMPTY_COMMANDS);
   const globalCommands = useRelay((s) => s.commands.global);
   const loadCommands = useRelay((s) => s.loadCommands);
   const createCommand = useRelay((s) => s.createCommand);

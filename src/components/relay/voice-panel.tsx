@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Headphones, Mic, MicOff, PhoneOff, Volume2 } from "lucide-react";
+import { Headphones, Mic, MicOff, PhoneOff, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,16 @@ export function VoicePanel({ guildId }: { guildId: string }) {
   const active = voiceChannels.find((c) => c.id === voiceChannelId);
   const selectValue = selected || voiceChannels[0]?.id || "";
 
+  function sendVoiceState(channelId: string | null, mute: boolean, deaf: boolean) {
+    const gw = getGateway();
+    if (!gw) {
+      toast.error("Gateway not ready — reconnect the bot");
+      return false;
+    }
+    gw.updateVoiceState(guildId, channelId, mute, deaf);
+    return true;
+  }
+
   async function onJoin() {
     const id = selectValue;
     if (!id) {
@@ -43,7 +53,8 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     setBusy(true);
     try {
       await joinVoice(guildId, id);
-      getGateway()?.updateVoiceState(guildId, id, selfMute, selfDeaf);
+      // Re-send with current mute/deaf flags (joinVoice sends unmuted by default)
+      sendVoiceState(id, selfMute, selfDeaf);
       toast.success(
         mode === "demo"
           ? "Joined voice (sample — not on Discord)"
@@ -60,6 +71,8 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     setBusy(true);
     try {
       await leaveVoice(guildId);
+      setSelfMute(false);
+      setSelfDeaf(false);
       toast.message("Left voice channel");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not leave voice");
@@ -68,13 +81,39 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     }
   }
 
-  function applyFlags() {
+  function toggleMute() {
+    const next = !selfMute;
+    setSelfMute(next);
     if (!voiceChannelId) {
-      toast.message("Join a channel first");
+      toast.message(next ? "Will join muted" : "Will join unmuted");
       return;
     }
-    getGateway()?.updateVoiceState(guildId, voiceChannelId, selfMute, selfDeaf);
-    toast.success("Mute / deaf flags sent");
+    if (mode === "demo") {
+      toast.success(next ? "Muted (sample)" : "Unmuted (sample)");
+      return;
+    }
+    if (sendVoiceState(voiceChannelId, next, selfDeaf)) {
+      toast.success(next ? "Bot muted" : "Bot unmuted");
+    }
+  }
+
+  function toggleDeaf() {
+    const next = !selfDeaf;
+    // Discord: deafen implies mute for the client flags
+    const mute = next ? true : selfMute;
+    setSelfDeaf(next);
+    if (next) setSelfMute(true);
+    if (!voiceChannelId) {
+      toast.message(next ? "Will join deafened" : "Will join undeafened");
+      return;
+    }
+    if (mode === "demo") {
+      toast.success(next ? "Deafened (sample)" : "Undeafened (sample)");
+      return;
+    }
+    if (sendVoiceState(voiceChannelId, mute, next)) {
+      toast.success(next ? "Bot deafened" : "Bot undeafened");
+    }
   }
 
   return (
@@ -84,23 +123,23 @@ export function VoicePanel({ guildId }: { guildId: string }) {
         <div className="min-w-0 flex-1">
           <h3 className="font-medium">Voice</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            The bot can <strong className="font-medium text-foreground">join and leave</strong> voice channels
-            while this tab stays open (gateway). It{" "}
-            <strong className="font-medium text-foreground">cannot stream mic audio or TTS</strong> from this
-            dashboard — that needs a separate always-on voice process, not a Vercel website.
+            Join / leave, mute, and deafen the <strong className="font-medium text-foreground">bot</strong> while
+            this tab stays open. Mute and deafen update Discord right away when the bot is in a channel.
           </p>
         </div>
       </div>
 
       {mode === "live" && !gatewayConnected ? (
         <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-          Gateway not connected yet. Wait a moment or reconnect the bot.
+          Gateway not connected yet. Wait a moment or reconnect the bot — mute/deafen need the gateway.
         </p>
       ) : null}
 
       {active ? (
         <p className="mt-3 text-sm">
           In channel: <span className="font-medium">{active.name}</span>
+          {selfMute ? " · muted" : ""}
+          {selfDeaf ? " · deafened" : ""}
         </p>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">Not in a voice channel</p>
@@ -144,7 +183,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
           type="button"
           size="sm"
           variant={selfMute ? "secondary" : "outline"}
-          onClick={() => setSelfMute((v) => !v)}
+          onClick={toggleMute}
         >
           {selfMute ? <MicOff className="size-4" /> : <Mic className="size-4" />}
           {selfMute ? "Muted" : "Unmuted"}
@@ -153,15 +192,15 @@ export function VoicePanel({ guildId }: { guildId: string }) {
           type="button"
           size="sm"
           variant={selfDeaf ? "secondary" : "outline"}
-          onClick={() => setSelfDeaf((v) => !v)}
+          onClick={toggleDeaf}
         >
-          <Headphones className="size-4" />
+          {selfDeaf ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
           {selfDeaf ? "Deafened" : "Undeafened"}
         </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={applyFlags} disabled={!voiceChannelId}>
-          Apply mute/deaf
-        </Button>
       </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        These control the bot in Discord, not your own account. Join a channel first, then toggle.
+      </p>
     </div>
   );
 }
