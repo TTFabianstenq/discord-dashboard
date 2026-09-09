@@ -1,7 +1,8 @@
 /**
  * Minimal Discord Gateway client for the browser.
- * Used only while the Relay tab is open: presence (op 3) and voice state (op 4).
- * Heartbeats keep the session alive; closing the tab disconnects the bot from gateway.
+ * Presence (op 3) and voice state (op 4) while the BotDeck tab is open.
+ * Closing the tab ends the gateway session — Discord will show the bot offline after that.
+ * A Vercel website cannot keep a bot online 24/7 without a separate always-on process.
  */
 
 export type PresenceStatus = "online" | "idle" | "dnd" | "invisible";
@@ -23,17 +24,21 @@ type GatewayHandlers = {
 };
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
-const INTENTS = 0; // presence/voice state for *this* bot do not need privileged intents
+const INTENTS = 0;
+const DEFAULT_PRESENCE: PresencePayload = { status: "online", activities: [], afk: false };
 
 export class DiscordGateway {
   private ws: WebSocket | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private presenceTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private sequence: number | null = null;
   private sessionId: string | null = null;
   private token: string;
   private handlers: GatewayHandlers;
-  private lastPresence: PresencePayload | null = null;
+  private lastPresence: PresencePayload = { ...DEFAULT_PRESENCE };
   private intentionalClose = false;
+  private reconnectAttempts = 0;
 
   constructor(token: string, handlers: GatewayHandlers = {}) {
     this.token = token;
@@ -64,27 +69,27 @@ export class DiscordGateway {
 
         switch (packet.op) {
           case 10: {
-            // Hello
             const d = packet.d as { heartbeat_interval: number };
             this.startHeartbeat(d.heartbeat_interval);
             this.identify();
             break;
           }
           case 11:
-            // Heartbeat ACK
             break;
           case 0:
             if (packet.t === "READY") {
               const d = packet.d as { session_id: string };
               this.sessionId = d.session_id;
-              if (this.lastPresence) this.updatePresence(this.lastPresence);
+              this.reconnectAttempts = 0;
+              // Always push online (or last chosen status) immediately after ready
+              this.pushPresence();
+              this.startPresenceRefresh();
               this.handlers.onReady?.();
             }
             break;
           case 9:
-            // Invalid session
-            this.handlers.onError?.("Gateway session invalid. Reconnect from the dashboard.");
-            this.disconnect();
+            this.handlers.onError?.("Gateway session invalid. Reconnecting…");
+            this.scheduleReconnect(true);
             break;
           default:
             break;
@@ -100,9 +105,11 @@ export class DiscordGateway {
 
     ws.onclose = (ev) => {
       this.clearHeartbeat();
+      this.clearPresenceRefresh();
       this.ws = null;
       if (!this.intentionalClose) {
         this.handlers.onClose?.(ev.code, ev.reason || "disconnected");
+        this.scheduleReconnect(false);
       }
     };
   }
@@ -110,6 +117,11 @@ export class DiscordGateway {
   disconnect(): void {
     this.intentionalClose = true;
     this.clearHeartbeat();
+    this.clearPresenceRefresh();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
       try {
         this.ws.close(1000, "client disconnect");
@@ -121,24 +133,22 @@ export class DiscordGateway {
   }
 
   updatePresence(presence: PresencePayload): void {
-    this.lastPresence = presence;
+    this.lastPresence = {
+      status: presence.status || "online",
+      activities: presence.activities ?? [],
+      afk: presence.afk ?? false,
+    };
     if (!this.connected) {
       this.connect();
       return;
     }
-    this.send(3, {
-      since: presence.status === "idle" ? Date.now() : null,
-      activities: presence.activities ?? [],
-      status: presence.status,
-      afk: presence.afk ?? false,
-    });
+    this.pushPresence();
   }
 
   /** Join, move, or leave a voice channel (channelId null = leave). */
   updateVoiceState(guildId: string, channelId: string | null, selfMute = false, selfDeaf = false): void {
     if (!this.connected) {
       this.connect();
-      // Queue: send after READY — simple retry
       const trySend = () => {
         if (this.connected) {
           this.send(4, {
@@ -162,28 +172,32 @@ export class DiscordGateway {
     });
   }
 
+  private pushPresence(): void {
+    const presence = this.lastPresence ?? DEFAULT_PRESENCE;
+    this.send(3, {
+      since: presence.status === "idle" ? Date.now() : null,
+      activities: presence.activities ?? [],
+      status: presence.status || "online",
+      afk: presence.afk ?? false,
+    });
+  }
+
   private identify(): void {
+    const presence = this.lastPresence ?? DEFAULT_PRESENCE;
     this.send(2, {
       token: this.token,
       intents: INTENTS,
       properties: {
         os: "linux",
-        browser: "relay",
-        device: "relay",
+        browser: "botdeck",
+        device: "botdeck",
       },
-      presence: this.lastPresence
-        ? {
-            since: this.lastPresence.status === "idle" ? Date.now() : null,
-            activities: this.lastPresence.activities ?? [],
-            status: this.lastPresence.status,
-            afk: this.lastPresence.afk ?? false,
-          }
-        : {
-            since: null,
-            activities: [],
-            status: "online",
-            afk: false,
-          },
+      presence: {
+        since: presence.status === "idle" ? Date.now() : null,
+        activities: presence.activities ?? [],
+        status: presence.status || "online",
+        afk: presence.afk ?? false,
+      },
     });
   }
 
@@ -194,7 +208,6 @@ export class DiscordGateway {
 
   private startHeartbeat(interval: number): void {
     this.clearHeartbeat();
-    // Jitter: first beat after interval * random
     const delay = interval * Math.random();
     setTimeout(() => {
       this.beat();
@@ -212,6 +225,36 @@ export class DiscordGateway {
       this.heartbeatTimer = null;
     }
   }
+
+  /** Re-assert presence every 5 minutes so Discord keeps the bot online. */
+  private startPresenceRefresh(): void {
+    this.clearPresenceRefresh();
+    this.presenceTimer = setInterval(() => {
+      if (this.connected) this.pushPresence();
+    }, 5 * 60_000);
+  }
+
+  private clearPresenceRefresh(): void {
+    if (this.presenceTimer) {
+      clearInterval(this.presenceTimer);
+      this.presenceTimer = null;
+    }
+  }
+
+  private scheduleReconnect(resetSession: boolean): void {
+    if (this.intentionalClose) return;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (resetSession) {
+      this.sessionId = null;
+      this.sequence = null;
+    }
+    const attempt = this.reconnectAttempts++;
+    const delay = Math.min(30_000, 1000 * 2 ** Math.min(attempt, 5));
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.intentionalClose) this.connect();
+    }, delay);
+  }
 }
 
 let singleton: DiscordGateway | null = null;
@@ -223,8 +266,9 @@ export function getGateway(): DiscordGateway | null {
 export function ensureGateway(token: string, handlers?: GatewayHandlers): DiscordGateway {
   if (singleton && singleton.connected) return singleton;
   singleton?.disconnect();
-  singleton = new DiscordGateway(token, handlers);
-  singleton.connect();
+  singleton = new DiscordGateway(token, handlers ?? {});
+  // Default to online before identify
+  singleton.updatePresence({ status: "online", activities: [], afk: false });
   return singleton;
 }
 
