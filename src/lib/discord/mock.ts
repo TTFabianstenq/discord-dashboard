@@ -12,16 +12,16 @@ const BOT_ID = "128490120938475521";
 
 export const demoBot: DiscordUser = {
   id: BOT_ID,
-  username: "Relay",
+  username: "BotDeck",
   discriminator: "0",
-  global_name: "Relay",
+  global_name: "BotDeck",
   avatar: null,
   bot: true,
 };
 
 export const demoApplication: DiscordApplication = {
   id: BOT_ID,
-  name: "Relay",
+  name: "BotDeck",
   icon: null,
   description: "A calm console for operating Discord bots — messages, channels, and server tools in one place.",
   bot_public: true,
@@ -194,13 +194,13 @@ export const demoMessages: Record<string, DiscordMessage[]> = {
           title: "Staging window",
           description: "The staging bot will be unreachable for twenty minutes while we rotate tokens.",
           color: 0xc9bfb0,
-          footer: { text: "Relay · scheduled" },
+          footer: { text: "BotDeck · scheduled" },
         },
       ],
     }),
     msg("m5", "c-nw-studio", U.ada, "Noted. I'll freeze deploys until 18:30.", 80),
     msg("m6", "c-nw-studio", U.rio, "First day — where should I read before touching channels?", 22),
-    msg("m7", "c-nw-studio", demoBot, "Start in #welcome, then this channel. Channel edits live under the Channels tab in Relay.", 18),
+    msg("m7", "c-nw-studio", demoBot, "Start in #welcome, then this channel. Channel edits live under the Channels tab in BotDeck.", 18),
   ],
   "c-nw-welcome": [
     msg("w1", "c-nw-welcome", demoBot, "Welcome to Northwind Labs. Introduce yourself in #studio when you're ready.", 4000, {

@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "BotDeck";
+const APP_DESCRIPTION =
+  "A console for every Discord bot. Connect with a token to send messages, edit channels, and run the bot.";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -13,11 +15,17 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: APP_NAME },
-      {
-        name: "description",
-        content: "A console for every Discord bot. Connect with a token to send messages, edit channels, and run the bot.",
-      },
+      { name: "description", content: APP_DESCRIPTION },
       { name: "theme-color", content: "#0a0b0d" },
+      // Discord / social link previews
+      { property: "og:type", content: "website" },
+      { property: "og:site_name", content: APP_NAME },
+      { property: "og:title", content: APP_NAME },
+      { property: "og:description", content: APP_DESCRIPTION },
+      { property: "og:image", content: "/og.jpg" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: APP_NAME },
+      { name: "twitter:description", content: APP_DESCRIPTION },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
