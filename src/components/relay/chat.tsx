@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizontal, Pencil, RefreshCw, Send, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, RefreshCw, Reply, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,8 +30,12 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
   const list = channels;
   const textChannels = useMemo(() => list.filter((c) => isTextLike(c.type)), [list]);
   const channel = channelId ? list.find((c) => c.id === channelId) : undefined;
+  const [replyTo, setReplyTo] = useState<DiscordMessage | null>(null);
 
-  // Initial load + keep pulling so messages from other people show up
+  useEffect(() => {
+    setReplyTo(null);
+  }, [channelId]);
+
   useEffect(() => {
     if (!channelId) return;
     void loadMessages(channelId, true);
@@ -83,9 +87,6 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
               ))}
             </SelectContent>
           </Select>
-          {channel.topic ? (
-            <p className="hidden truncate px-1 text-xs text-muted-foreground sm:block">{channel.topic}</p>
-          ) : null}
         </div>
         <Button
           variant="ghost"
@@ -97,8 +98,8 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
           <RefreshCw className="size-4" />
         </Button>
       </header>
-      <MessageList channelId={channel.id} />
-      <Composer channelId={channel.id} />
+      <MessageList channelId={channel.id} onReply={setReplyTo} />
+      <Composer channelId={channel.id} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
     </div>
   );
 }
@@ -112,33 +113,44 @@ function Empty({ title, body }: { title: string; body: string }) {
   );
 }
 
-function MessageList({ channelId }: { channelId: string }) {
+function MessageList({
+  channelId,
+  onReply,
+}: {
+  channelId: string;
+  onReply: (m: DiscordMessage) => void;
+}) {
   const messages = useRelay((s) => s.messages[channelId]);
   const botId = useRelay((s) => s.bot?.id);
   const bottom = useRef<HTMLDivElement>(null);
   const list = messages ?? EMPTY_CHANNELS;
-  const stickBottom = useRef(true);
+  const prevLen = useRef(0);
 
+  // Always jump to latest when new messages arrive
   useEffect(() => {
-    if (stickBottom.current) {
+    if (list.length !== prevLen.current) {
+      prevLen.current = list.length;
       bottom.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [list.length, channelId]);
 
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "auto" });
+  }, [channelId]);
+
   return (
-    <div
-      className="scroll-thin min-h-0 flex-1 overflow-y-auto px-4 py-4"
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-      }}
-    >
+    <div className="scroll-thin min-h-0 flex-1 overflow-y-auto px-4 py-4">
       {list.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted-foreground">No messages in this channel yet.</p>
       ) : (
         <ul className="flex flex-col gap-4">
           {list.map((m) => (
-            <MessageRow key={m.id} message={m as DiscordMessage} mine={(m as DiscordMessage).author.id === botId} />
+            <MessageRow
+              key={m.id}
+              message={m as DiscordMessage}
+              mine={(m as DiscordMessage).author.id === botId}
+              onReply={() => onReply(m as DiscordMessage)}
+            />
           ))}
         </ul>
       )}
@@ -147,7 +159,15 @@ function MessageList({ channelId }: { channelId: string }) {
   );
 }
 
-function MessageRow({ message, mine }: { message: DiscordMessage; mine: boolean }) {
+function MessageRow({
+  message,
+  mine,
+  onReply,
+}: {
+  message: DiscordMessage;
+  mine: boolean;
+  onReply: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const editMessage = useRelay((s) => s.editMessage);
@@ -182,9 +202,6 @@ function MessageRow({ message, mine }: { message: DiscordMessage; mine: boolean 
             </span>
           ) : null}
           <span className="text-[11px] text-muted-foreground">{formatStamp(message.timestamp)}</span>
-          {message.edited_timestamp ? (
-            <span className="text-[11px] text-muted-foreground">(edited)</span>
-          ) : null}
           <div className="ml-auto opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -193,6 +210,10 @@ function MessageRow({ message, mine }: { message: DiscordMessage; mine: boolean 
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onReply}>
+                  <Reply className="size-4" />
+                  Reply
+                </DropdownMenuItem>
                 {mine ? (
                   <DropdownMenuItem
                     onClick={() => {
@@ -254,29 +275,25 @@ function EmbedCard({ embed }: { embed: DiscordEmbed }) {
       <div className="flex">
         <span className="w-1 shrink-0" style={{ background: color }} />
         <div className="min-w-0 flex-1 px-3 py-2.5">
-          {embed.author?.name ? <p className="text-[11px] text-muted-foreground">{embed.author.name}</p> : null}
           {embed.title ? <p className="font-medium">{embed.title}</p> : null}
           {embed.description ? (
             <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{embed.description}</p>
           ) : null}
-          {embed.fields && embed.fields.length > 0 ? (
-            <dl className="mt-2 grid gap-2 sm:grid-cols-2">
-              {embed.fields.map((f) => (
-                <div key={f.name} className={f.inline ? "" : "sm:col-span-2"}>
-                  <dt className="text-[11px] font-medium text-muted-foreground">{f.name}</dt>
-                  <dd className="text-sm">{f.value}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
-          {embed.footer?.text ? <p className="mt-2 text-[11px] text-muted-foreground">{embed.footer.text}</p> : null}
         </div>
       </div>
     </div>
   );
 }
 
-function Composer({ channelId }: { channelId: string }) {
+function Composer({
+  channelId,
+  replyTo,
+  onClearReply,
+}: {
+  channelId: string;
+  replyTo: DiscordMessage | null;
+  onClearReply: () => void;
+}) {
   const sendMessage = useRelay((s) => s.sendMessage);
   const loadMessages = useRelay((s) => s.loadMessages);
   const [content, setContent] = useState("");
@@ -294,11 +311,13 @@ function Composer({ channelId }: { channelId: string }) {
   async function send() {
     setSending(true);
     try {
-      await sendMessage(channelId, content, embeds);
+      await sendMessage(channelId, content, embeds, {
+        messageReferenceId: replyTo?.id,
+      });
       setContent("");
       setTitle("");
       setDescription("");
-      // Pull latest so other people's messages appear right after you send
+      onClearReply();
       void loadMessages(channelId, true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not send");
@@ -309,6 +328,18 @@ function Composer({ channelId }: { channelId: string }) {
 
   return (
     <div className="shrink-0 border-t border-border p-3 sm:p-4">
+      {replyTo ? (
+        <div className="mb-2 flex items-center gap-2 rounded-md border border-border bg-secondary/50 px-3 py-2 text-xs">
+          <Reply className="size-3.5 shrink-0 text-stone" />
+          <span className="min-w-0 flex-1 truncate">
+            Replying to <strong>{replyTo.author.username}</strong>
+            {replyTo.content ? `: ${replyTo.content}` : ""}
+          </span>
+          <button type="button" onClick={onClearReply} className="rounded p-1 hover:bg-secondary" aria-label="Cancel reply">
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
       <div className="rounded-lg border border-border bg-card p-2 sm:p-3">
         {embedOn ? (
           <div className="mb-3 grid gap-2 rounded-md bg-secondary/50 p-3 sm:grid-cols-2">
@@ -329,7 +360,7 @@ function Composer({ channelId }: { channelId: string }) {
         <Textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="Message as the bot"
+          placeholder={replyTo ? "Write a reply…" : "Message as the bot"}
           className="min-h-[52px] resize-none border-0 bg-transparent focus-visible:ring-0"
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -345,7 +376,7 @@ function Composer({ channelId }: { channelId: string }) {
           </label>
           <Button size="sm" onClick={() => void send()} disabled={sending}>
             <Send className="size-4" />
-            Send
+            {replyTo ? "Reply" : "Send"}
           </Button>
         </div>
       </div>
