@@ -1,8 +1,6 @@
 /**
  * Minimal Discord Gateway client for the browser.
  * Presence (op 3) and voice state (op 4) while the BotDeck tab is open.
- * Closing the tab ends the gateway session — Discord will show the bot offline after that.
- * A Vercel website cannot keep a bot online 24/7 without a separate always-on process.
  */
 
 export type PresenceStatus = "online" | "idle" | "dnd" | "invisible";
@@ -11,8 +9,9 @@ export type PresencePayload = {
   status: PresenceStatus;
   activities?: {
     name: string;
-    type: number; // 0 Playing, 1 Streaming, 2 Listening, 3 Watching, 5 Competing
+    type: number;
     url?: string;
+    state?: string;
   }[];
   afk?: boolean;
 };
@@ -26,7 +25,6 @@ type GatewayHandlers = {
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 const INTENTS = 0;
 
-/** Default when a bot connects through BotDeck. */
 const DEFAULT_PRESENCE: PresencePayload = {
   status: "online",
   activities: [{ name: "Managed by BotDeck", type: 0 }],
@@ -154,7 +152,6 @@ export class DiscordGateway {
     this.pushPresence();
   }
 
-  /** Join, move, or leave a voice channel (channelId null = leave). */
   updateVoiceState(guildId: string, channelId: string | null, selfMute = false, selfDeaf = false): void {
     if (!this.connected) {
       this.connect();
@@ -185,7 +182,12 @@ export class DiscordGateway {
     const presence = this.lastPresence ?? DEFAULT_PRESENCE;
     this.send(3, {
       since: presence.status === "idle" ? Date.now() : null,
-      activities: presence.activities ?? [],
+      activities: (presence.activities ?? []).map((a) => ({
+        name: a.name,
+        type: a.type,
+        url: a.url,
+        state: a.state,
+      })),
       status: presence.status || "online",
       afk: presence.afk ?? false,
     });
@@ -235,7 +237,6 @@ export class DiscordGateway {
     }
   }
 
-  /** Re-assert presence every 5 minutes so Discord keeps the bot online. */
   private startPresenceRefresh(): void {
     this.clearPresenceRefresh();
     this.presenceTimer = setInterval(() => {
@@ -276,7 +277,6 @@ export function ensureGateway(token: string, handlers?: GatewayHandlers): Discor
   if (singleton && singleton.connected) return singleton;
   singleton?.disconnect();
   singleton = new DiscordGateway(token, handlers ?? {});
-  // Playing Managed by BotDeck + online on every connect
   singleton.updatePresence({
     status: "online",
     activities: [{ name: "Managed by BotDeck", type: 0 }],

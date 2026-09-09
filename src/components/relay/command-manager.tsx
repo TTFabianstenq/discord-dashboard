@@ -70,11 +70,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
     setBusy(true);
     try {
       await createCommand(
-        {
-          name: n,
-          description: description.trim(),
-          type: Number(type),
-        },
+        { name: n, description: description.trim(), type: Number(type) },
         scope === "guild" ? guildId : undefined,
       );
       toast.success(scope === "guild" ? "Guild command created" : "Global command created (can take up to 1h)");
@@ -94,7 +90,8 @@ export function CommandManager({ guildId }: { guildId: string }) {
         <div>
           <h2 className="font-serif text-2xl tracking-tight">Slash commands</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Register application commands for this server or globally.
+            Register commands Discord users can run. Bots cannot "run" slash commands as themselves from here —
+            they respond when someone uses them in Discord (that needs your bot code / interactions endpoint).
           </p>
         </div>
         <div className="flex gap-2">
@@ -137,12 +134,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
                       : " · chat"}
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Delete command"
-                onClick={() => setPendingDelete(c)}
-              >
+              <Button variant="ghost" size="icon-sm" aria-label="Delete command" onClick={() => setPendingDelete(c)}>
                 <Trash2 className="size-4" />
               </Button>
             </li>
@@ -163,13 +155,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
           <div className="grid gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="cmd-name">Name</Label>
-              <Input
-                id="cmd-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="ping"
-                maxLength={32}
-              />
+              <Input id="cmd-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="ping" maxLength={32} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="cmd-desc">Description</Label>
