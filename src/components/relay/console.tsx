@@ -76,7 +76,7 @@ export function Console() {
         </Button>
         <span className="inline-flex items-center gap-2">
           <RelayMark className="size-5" />
-          <span className="font-serif text-base">Relay</span>
+          <span className="font-serif text-base">Botdeck</span>
         </span>
         {mode === "demo" ? (
           <span className="hidden rounded-full bg-stone/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone sm:inline">
