@@ -4,15 +4,21 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { userAvatarUrl } from "@/lib/discord/cdn";
 import { getGateway } from "@/lib/discord/gateway";
 import { CHANNEL_TYPES } from "@/lib/discord/types";
-import { useRelay } from "@/lib/discord/store";
+import { useRelay, type VoiceStateEntry } from "@/lib/discord/store";
+import { EntityAvatar } from "./entity-avatar";
 
 const EMPTY: never[] = [];
+const EMPTY_VS: VoiceStateEntry[] = [];
 
 export function VoicePanel({ guildId }: { guildId: string }) {
   const channels = useRelay((s) => s.channels[guildId] ?? EMPTY);
   const voiceChannelId = useRelay((s) => s.voiceChannelId);
+  const voiceStates = useRelay((s) => s.voiceStates[guildId] ?? EMPTY_VS);
+  const members = useRelay((s) => s.members[guildId] ?? EMPTY);
+  const bot = useRelay((s) => s.bot);
   const joinVoice = useRelay((s) => s.joinVoice);
   const leaveVoice = useRelay((s) => s.leaveVoice);
   const mode = useRelay((s) => s.mode);
@@ -33,7 +39,26 @@ export function VoicePanel({ guildId }: { guildId: string }) {
 
   const active = voiceChannels.find((c) => c.id === voiceChannelId);
   const inThisGuild = Boolean(active);
-  const selectValue = selected || voiceChannels[0]?.id || "";
+  const selectValue = selected || voiceChannelId || voiceChannels[0]?.id || "";
+
+  const rosterChannelId = inThisGuild ? voiceChannelId : selectValue;
+
+  const peopleInChannel = useMemo(() => {
+    if (!rosterChannelId) return [] as VoiceStateEntry[];
+    return voiceStates.filter((v) => v.channel_id === rosterChannelId);
+  }, [voiceStates, rosterChannelId]);
+
+  function displayName(v: VoiceStateEntry): string {
+    if (v.nick) return v.nick;
+    if (v.global_name) return v.global_name;
+    if (v.username) return v.username;
+    const m = members.find((x) => x.user?.id === v.user_id);
+    if (m?.nick) return m.nick;
+    if (m?.user?.global_name) return m.user.global_name;
+    if (m?.user?.username) return m.user.username;
+    if (bot?.id === v.user_id) return bot.username;
+    return v.user_id;
+  }
 
   function sendVoiceState(channelId: string | null, mute: boolean, deaf: boolean) {
     const gw = getGateway();
@@ -115,6 +140,10 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     }
   }
 
+  const rosterTitle = rosterChannelId
+    ? voiceChannels.find((c) => c.id === rosterChannelId)?.name ?? "channel"
+    : null;
+
   return (
     <div
       className={
@@ -135,14 +164,14 @@ export function VoicePanel({ guildId }: { guildId: string }) {
             ) : null}
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Join / leave, mute, and deafen the bot while this tab stays open.
+            Join / leave, mute, deafen, and see who is in the channel. Keep this tab open. No audio from the site.
           </p>
         </div>
       </div>
 
       {mode === "live" && !gatewayConnected ? (
         <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-          Gateway not connected yet. Wait a moment or reconnect the bot.
+          Gateway not connected yet — voice roster and join need the gateway. Wait or reconnect.
         </p>
       ) : null}
 
@@ -168,13 +197,17 @@ export function VoicePanel({ guildId }: { guildId: string }) {
               <SelectValue placeholder="Select voice channel" />
             </SelectTrigger>
             <SelectContent>
-              {voiceChannels.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                  {c.type === CHANNEL_TYPES.GUILD_STAGE_VOICE ? " (stage)" : ""}
-                  {c.id === voiceChannelId ? " · live" : ""}
-                </SelectItem>
-              ))}
+              {voiceChannels.map((c) => {
+                const count = voiceStates.filter((v) => v.channel_id === c.id).length;
+                return (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                    {c.type === CHANNEL_TYPES.GUILD_STAGE_VOICE ? " (stage)" : ""}
+                    {count ? ` · ${count}` : ""}
+                    {c.id === voiceChannelId ? " · live" : ""}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
@@ -199,6 +232,50 @@ export function VoicePanel({ guildId }: { guildId: string }) {
           {selfDeaf ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
           {selfDeaf ? "Deafened" : "Undeafened"}
         </Button>
+      </div>
+
+      <div className="mt-4 border-t border-border/60 pt-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          In {rosterTitle ? `#${rosterTitle}` : "channel"}
+          {peopleInChannel.length ? ` · ${peopleInChannel.length}` : ""}
+        </p>
+        {mode === "demo" ? (
+          <p className="mt-2 text-sm text-muted-foreground">Sample mode has no live voice roster.</p>
+        ) : !gatewayConnected ? (
+          <p className="mt-2 text-sm text-muted-foreground">Waiting for gateway…</p>
+        ) : peopleInChannel.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">Nobody in this channel right now.</p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {peopleInChannel.map((v) => {
+              const name = displayName(v);
+              const isBot = v.bot || v.user_id === bot?.id;
+              const avatar =
+                v.avatar != null
+                  ? userAvatarUrl({
+                      id: v.user_id,
+                      username: v.username || name,
+                      discriminator: "0",
+                      avatar: v.avatar,
+                    })
+                  : null;
+              return (
+                <li key={v.user_id} className="flex items-center gap-2 rounded-md bg-background/40 px-2 py-1.5">
+                  <EntityAvatar name={name} id={v.user_id} src={avatar} size="sm" />
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {name}
+                    {isBot ? <span className="ml-1 text-[10px] uppercase text-stone">Bot</span> : null}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {v.self_mute || v.mute ? "muted" : ""}
+                    {(v.self_mute || v.mute) && (v.self_deaf || v.deaf) ? " · " : ""}
+                    {v.self_deaf || v.deaf ? "deaf" : ""}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );

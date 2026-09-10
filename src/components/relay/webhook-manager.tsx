@@ -37,6 +37,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
   const loadWebhooks = useRelay((s) => s.loadWebhooks);
   const createWebhook = useRelay((s) => s.createWebhook);
   const deleteWebhook = useRelay((s) => s.deleteWebhook);
+  const editWebhook = useRelay((s) => s.editWebhook);
   const mode = useRelay((s) => s.mode);
   const token = useRelay((s) => s.token);
 
@@ -49,6 +50,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
   const [sendTarget, setSendTarget] = useState<DiscordWebhook | null>(null);
   const [sendContent, setSendContent] = useState("");
   const [sendUsername, setSendUsername] = useState("");
+  const [sendChannelId, setSendChannelId] = useState("");
   const [sending, setSending] = useState(false);
 
   const textChannels = useMemo(() => channels.filter((c) => isTextLike(c.type)), [channels]);
@@ -101,8 +103,24 @@ export function WebhookManager({ guildId }: { guildId: string }) {
       toast.error("This webhook has no token (app-owned webhooks often cannot be executed from here)");
       return;
     }
+    const dest = sendChannelId || sendTarget.channel_id;
+    if (!dest) {
+      toast.error("Pick a channel");
+      return;
+    }
     setSending(true);
     try {
+      if (dest !== sendTarget.channel_id) {
+        await editWebhook(sendTarget.id, { channel_id: dest });
+        useRelay.setState((s) => ({
+          webhooks: {
+            ...s.webhooks,
+            [guildId]: (s.webhooks[guildId] ?? []).map((w) =>
+              w.id === sendTarget.id ? { ...w, channel_id: dest } : w,
+            ),
+          },
+        }));
+      }
       const body: { content: string; username?: string } = { content: bodyContent };
       if (sendUsername.trim()) body.username = sendUsername.trim();
       await discordRequest({
@@ -113,10 +131,11 @@ export function WebhookManager({ guildId }: { guildId: string }) {
           body,
         },
       });
-      toast.success("Sent via webhook");
+      toast.success(`Sent via webhook to #${textChannels.find((c) => c.id === dest)?.name ?? "channel"}`);
       setSendContent("");
       setSendTarget(null);
       setSendUsername("");
+      setSendChannelId("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not send webhook message");
     } finally {
@@ -130,8 +149,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
         <div>
           <h2 className="font-serif text-2xl tracking-tight">Webhooks</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create, delete, or <strong className="font-medium text-foreground">send a message</strong> through a
-            webhook. Needs Manage Webhooks.
+            Create, delete, or send through a webhook. When sending you pick the target channel (moves the webhook if needed).
           </p>
         </div>
         <Button onClick={() => setOpen(true)}>
@@ -168,6 +186,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
                     setSendTarget(wh);
                     setSendContent("");
                     setSendUsername(wh.name || "");
+                    setSendChannelId(wh.channel_id);
                   }}
                 >
                   <Send className="size-4" />
@@ -197,12 +216,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
                     <Copy className="size-4" />
                   </Button>
                 ) : null}
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Delete webhook"
-                  onClick={() => setPendingDelete(wh)}
-                >
+                <Button variant="ghost" size="icon-sm" aria-label="Delete webhook" onClick={() => setPendingDelete(wh)}>
                   <Trash2 className="size-4" />
                 </Button>
               </li>
@@ -255,6 +269,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
           if (!o) {
             setSendTarget(null);
             setSendContent("");
+            setSendChannelId("");
           }
         }}
       >
@@ -262,14 +277,26 @@ export function WebhookManager({ guildId }: { guildId: string }) {
           <DialogHeader>
             <DialogTitle>Send via webhook</DialogTitle>
             <DialogDescription>
-              Posts as <strong>{sendTarget?.name || "Webhook"}</strong>
-              {sendTarget?.channel_id
-                ? ` in #${channels.find((c) => c.id === sendTarget.channel_id)?.name ?? "channel"}`
-                : ""}
-              . Not as the bot user.
+              Posts as <strong>{sendTarget?.name || "Webhook"}</strong>. Choose any text channel — the webhook is
+              moved there if needed, then the message is sent.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label>Channel</Label>
+              <Select value={sendChannelId} onValueChange={setSendChannelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  {textChannels.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      #{c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid gap-1.5">
               <Label htmlFor="wh-send-name">Display name (optional)</Label>
               <Input
@@ -296,7 +323,7 @@ export function WebhookManager({ guildId }: { guildId: string }) {
             <Button variant="outline" onClick={() => setSendTarget(null)}>
               Cancel
             </Button>
-            <Button onClick={() => void onSend()} disabled={sending || !sendContent.trim()}>
+            <Button onClick={() => void onSend()} disabled={sending || !sendContent.trim() || !sendChannelId}>
               <Send className="size-4" />
               {sending ? "Sending…" : "Send"}
             </Button>
