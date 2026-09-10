@@ -86,6 +86,17 @@ export type DiscordEmbed = {
   image?: { url: string };
 };
 
+export type DiscordAttachment = {
+  id: string;
+  filename: string;
+  url: string;
+  proxy_url?: string;
+  size?: number;
+  content_type?: string | null;
+  width?: number | null;
+  height?: number | null;
+};
+
 export type DiscordMessage = {
   id: string;
   channel_id: string;
@@ -95,6 +106,7 @@ export type DiscordMessage = {
   timestamp: string;
   edited_timestamp: string | null;
   embeds: DiscordEmbed[];
+  attachments?: DiscordAttachment[];
   pinned: boolean;
   type: number;
   webhook_id?: string;

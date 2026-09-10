@@ -27,6 +27,7 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
   const channels = useRelay((s) => s.channels[guildId] ?? EMPTY_CHANNELS);
   const loadMessages = useRelay((s) => s.loadMessages);
   const setView = useRelay((s) => s.setView);
+  const mode = useRelay((s) => s.mode);
   const list = channels;
   const textChannels = useMemo(() => list.filter((c) => isTextLike(c.type)), [list]);
   const channel = channelId ? list.find((c) => c.id === channelId) : undefined;
@@ -98,8 +99,50 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
           <RefreshCw className="size-4" />
         </Button>
       </header>
+      {mode === "live" ? <MessageContentIntentBanner channelId={channel.id} /> : null}
       <MessageList channelId={channel.id} onReply={setReplyTo} />
       <Composer channelId={channel.id} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
+    </div>
+  );
+}
+
+/** Discord strips message content unless Message Content Intent is on. */
+function MessageContentIntentBanner({ channelId }: { channelId: string }) {
+  const messages = useRelay((s) => s.messages[channelId]);
+  const list = messages ?? [];
+  if (list.length < 3) return null;
+
+  const emptyBodies = list.filter((m) => {
+    const contentEmpty = !m.content || !String(m.content).trim();
+    const embedsEmpty = !m.embeds?.length;
+    const attachEmpty = !m.attachments?.length;
+    return contentEmpty && embedsEmpty && attachEmpty;
+  }).length;
+
+  // If most messages have no body, intent is almost certainly off
+  if (emptyBodies < Math.max(3, Math.floor(list.length * 0.6))) return null;
+
+  return (
+    <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100 sm:px-4">
+      <strong className="font-medium">Message text is empty from Discord.</strong> Enable{" "}
+      <strong className="font-medium">Message Content Intent</strong> for this bot:
+      <ol className="mt-1 list-inside list-decimal space-y-0.5 text-amber-100/90">
+        <li>
+          Open{" "}
+          <a
+            className="underline"
+            href="https://discord.com/developers/applications"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Discord Developer Portal
+          </a>
+        </li>
+        <li>Select your application → Bot → Privileged Gateway Intents</li>
+        <li>Turn on <strong>Message Content Intent</strong> → Save</li>
+        <li>Refresh this page and reopen the channel</li>
+      </ol>
+      Without that intent Discord returns usernames but blanks out <code className="rounded bg-black/30 px-1">content</code>.
     </div>
   );
 }
@@ -126,7 +169,6 @@ function MessageList({
   const list = messages ?? EMPTY_CHANNELS;
   const prevLen = useRef(0);
 
-  // Always jump to latest when new messages arrive
   useEffect(() => {
     if (list.length !== prevLen.current) {
       prevLen.current = list.length;
@@ -148,7 +190,7 @@ function MessageList({
             <MessageRow
               key={m.id}
               message={m as DiscordMessage}
-              mine={(m as DiscordMessage).author.id === botId}
+              mine={(m as DiscordMessage).author?.id === botId}
               onReply={() => onReply(m as DiscordMessage)}
             />
           ))}
@@ -169,9 +211,14 @@ function MessageRow({
   onReply: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(message.content);
+  const [draft, setDraft] = useState(message.content ?? "");
   const editMessage = useRelay((s) => s.editMessage);
   const deleteMessage = useRelay((s) => s.deleteMessage);
+
+  const content = message.content ?? "";
+  const embeds = message.embeds ?? [];
+  const attachments = message.attachments ?? [];
+  const hasBody = Boolean(content.trim()) || embeds.length > 0 || attachments.length > 0;
 
   async function save() {
     try {
@@ -186,17 +233,17 @@ function MessageRow({
   return (
     <li className="group flex gap-3">
       <EntityAvatar
-        name={message.author.global_name || message.author.username}
-        id={message.author.id}
-        src={userAvatarUrl(message.author)}
+        name={message.author?.global_name || message.author?.username || "?"}
+        id={message.author?.id ?? "0"}
+        src={message.author ? userAvatarUrl(message.author) : null}
         size="md"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium">
-            {message.author.global_name || message.author.username}
+          <span className="text-sm font-medium text-foreground">
+            {message.author?.global_name || message.author?.username || "Unknown"}
           </span>
-          {message.author.bot ? (
+          {message.author?.bot ? (
             <span className="rounded-sm bg-stone/15 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-stone">
               Bot
             </span>
@@ -205,7 +252,11 @@ function MessageRow({
           <div className="ml-auto opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" className="rounded-sm p-1 text-muted-foreground hover:bg-secondary" aria-label="Message actions">
+                <button
+                  type="button"
+                  className="rounded-sm p-1 text-muted-foreground hover:bg-secondary"
+                  aria-label="Message actions"
+                >
                   <MoreHorizontal className="size-4" />
                 </button>
               </DropdownMenuTrigger>
@@ -217,7 +268,7 @@ function MessageRow({
                 {mine ? (
                   <DropdownMenuItem
                     onClick={() => {
-                      setDraft(message.content);
+                      setDraft(content);
                       setEditing(true);
                     }}
                   >
@@ -257,10 +308,45 @@ function MessageRow({
           </div>
         ) : (
           <>
-            {message.content ? <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p> : null}
-            {message.embeds.map((embed, i) => (
+            {content.trim() ? (
+              <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+                {content}
+              </p>
+            ) : null}
+            {embeds.map((embed, i) => (
               <EmbedCard key={i} embed={embed} />
             ))}
+            {attachments.length > 0 ? (
+              <ul className="mt-1 flex flex-col gap-1">
+                {attachments.map((a) => (
+                  <li key={a.id}>
+                    {a.content_type?.startsWith("image/") ? (
+                      <a href={a.url} target="_blank" rel="noreferrer">
+                        <img
+                          src={a.proxy_url || a.url}
+                          alt={a.filename}
+                          className="mt-1 max-h-64 max-w-full rounded-md border border-border"
+                        />
+                      </a>
+                    ) : (
+                      <a
+                        href={a.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-stone underline"
+                      >
+                        {a.filename}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {!hasBody ? (
+              <p className="mt-0.5 text-xs italic text-muted-foreground">
+                (no text — enable Message Content Intent, or this message has no body)
+              </p>
+            ) : null}
           </>
         )}
       </div>
@@ -275,10 +361,15 @@ function EmbedCard({ embed }: { embed: DiscordEmbed }) {
       <div className="flex">
         <span className="w-1 shrink-0" style={{ background: color }} />
         <div className="min-w-0 flex-1 px-3 py-2.5">
-          {embed.title ? <p className="font-medium">{embed.title}</p> : null}
+          {embed.author?.name ? <p className="text-[11px] text-muted-foreground">{embed.author.name}</p> : null}
+          {embed.title ? <p className="font-medium text-foreground">{embed.title}</p> : null}
           {embed.description ? (
             <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{embed.description}</p>
           ) : null}
+          {embed.image?.url ? (
+            <img src={embed.image.url} alt="" className="mt-2 max-h-48 max-w-full rounded" />
+          ) : null}
+          {embed.footer?.text ? <p className="mt-2 text-[11px] text-muted-foreground">{embed.footer.text}</p> : null}
         </div>
       </div>
     </div>
@@ -332,7 +423,7 @@ function Composer({
         <div className="mb-2 flex items-center gap-2 rounded-md border border-border bg-secondary/50 px-3 py-2 text-xs">
           <Reply className="size-3.5 shrink-0 text-stone" />
           <span className="min-w-0 flex-1 truncate">
-            Replying to <strong>{replyTo.author.username}</strong>
+            Replying to <strong>{replyTo.author?.username}</strong>
             {replyTo.content ? `: ${replyTo.content}` : ""}
           </span>
           <button type="button" onClick={onClearReply} className="rounded p-1 hover:bg-secondary" aria-label="Cancel reply">
