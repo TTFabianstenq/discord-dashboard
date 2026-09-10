@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { useRelay } from "@/lib/discord/store";
 import { RelayMark } from "./mark";
 
+const ACK_KEY = "botdeck.intents_ack";
+
 export function LoginScreen() {
   const connectLive = useRelay((s) => s.connectLive);
   const connectDemo = useRelay((s) => s.connectDemo);
@@ -16,10 +18,25 @@ export function LoginScreen() {
   const [show, setShow] = useState(false);
   const [mask, setMask] = useState(false);
   const [guide, setGuide] = useState(false);
+  const [acked, setAcked] = useState(false);
 
   useEffect(() => {
     setMask(true);
+    try {
+      if (sessionStorage.getItem(ACK_KEY) === "1") setAcked(true);
+    } catch {
+      /* ignore */
+    }
   }, []);
+
+  function acceptIntentsWarning() {
+    try {
+      sessionStorage.setItem(ACK_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    setAcked(true);
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -29,6 +46,93 @@ export function LoginScreen() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not connect");
     }
+  }
+
+  if (!acked) {
+    return (
+      <main className="relative min-h-dvh overflow-hidden bg-background">
+        <div className="pointer-events-none absolute inset-0 bg-grid opacity-70" />
+        <header className="relative z-10 flex items-center px-5 py-5 sm:px-10">
+          <span className="inline-flex items-center gap-2.5">
+            <RelayMark className="size-7" />
+            <span className="font-serif text-xl tracking-tight">BotDeck</span>
+          </span>
+        </header>
+        <div className="relative z-10 mx-auto flex max-w-lg flex-col gap-6 px-5 pb-16 pt-6 sm:px-10">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-amber-200/90">Required setup</p>
+            <h1 className="mt-2 font-serif text-3xl tracking-tight sm:text-4xl">Turn on Privileged Gateway Intents</h1>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              Discord will not send message text, member lists, or presence data unless these are enabled on your bot
+              in the Developer Portal. BotDeck cannot bypass this.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-4 sm:p-5">
+            <p className="text-sm font-medium text-amber-50">Enable all of these under Bot → Privileged Gateway Intents:</p>
+            <ul className="mt-3 space-y-3 text-sm text-amber-50/95">
+              <li className="rounded-lg border border-amber-500/25 bg-black/20 px-3 py-2.5">
+                <p className="font-medium">Message Content Intent</p>
+                <p className="mt-0.5 text-xs text-amber-100/80">
+                  Without this, Chat shows names and times but <strong>no message text</strong>.
+                </p>
+              </li>
+              <li className="rounded-lg border border-amber-500/25 bg-black/20 px-3 py-2.5">
+                <p className="font-medium">Server Members Intent</p>
+                <p className="mt-0.5 text-xs text-amber-100/80">
+                  Without this, the Members tab is empty or incomplete.
+                </p>
+              </li>
+              <li className="rounded-lg border border-amber-500/25 bg-black/20 px-3 py-2.5">
+                <p className="font-medium">Presence Intent</p>
+                <p className="mt-0.5 text-xs text-amber-100/80">
+                  Optional for most of BotDeck, but turn it on if you care about live presence data from Discord.
+                </p>
+              </li>
+            </ul>
+            <p className="mt-3 text-xs leading-relaxed text-amber-100/85">
+              Path:{" "}
+              <a
+                className="underline"
+                href="https://discord.com/developers/applications"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Discord Developer Portal
+              </a>{" "}
+              → your app → <strong>Bot</strong> → Privileged Gateway Intents → toggle on → <strong>Save Changes</strong>.
+              Under 10,000 users this is a free toggle (no Discord review).
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button size="lg" className="flex-1" onClick={acceptIntentsWarning}>
+              I turned them on — continue
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                window.open("https://discord.com/developers/applications", "_blank", "noopener,noreferrer");
+              }}
+            >
+              Open Developer Portal
+            </Button>
+          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            You can still connect without them, but chat text and members will not work correctly.
+          </p>
+          <button
+            type="button"
+            className="text-center text-xs text-muted-foreground underline hover:text-foreground"
+            onClick={acceptIntentsWarning}
+          >
+            Skip warning and continue anyway
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -130,21 +234,11 @@ export function LoginScreen() {
               Try a sample bot
             </Button>
 
-            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100">
-              <p className="font-medium text-amber-50">To read other people’s messages in chat</p>
-              <p className="mt-1 text-amber-100/90">
-                Discord blocks message text unless you turn on{" "}
-                <strong>Message Content Intent</strong> once in the Developer Portal (Bot → Privileged Gateway
-                Intents). Without it, Discord only sends usernames — empty content is Discord’s rule, not a BotDeck
-                bug. Under 100 servers this is a free toggle; no Discord approval needed.
-              </p>
-            </div>
-
             <div className="flex items-start gap-2 rounded-md bg-secondary/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <Shield className="mt-0.5 size-3.5 shrink-0 text-stone" />
               <span>
                 The token stays in this browser tab and is sent only to Discord through BotDeck. Close the tab to
-                forget it. Anyone else can open this same page and connect a different bot.
+                forget it.
               </span>
             </div>
           </form>
@@ -154,17 +248,14 @@ export function LoginScreen() {
             onClick={() => setGuide((v) => !v)}
             className="mt-5 text-left text-xs font-medium text-stone hover:underline"
           >
-            {guide ? "Hide setup steps" : "Full setup (token + intents)"}
+            {guide ? "Hide token steps" : "How to get a bot token"}
           </button>
           {guide ? (
             <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
               <li>Open the Discord Developer Portal and select (or create) an application.</li>
               <li>Open the Bot tab and copy the token.</li>
-              <li>
-                Under Privileged Gateway Intents enable <strong>Message Content Intent</strong> (needed to see message
-                text) and <strong>Server Members Intent</strong> if you want the members list.
-              </li>
-              <li>Invite the bot to a server with Send Messages / Manage Channels as needed.</li>
+              <li>Enable Message Content Intent and Server Members Intent, then save.</li>
+              <li>Invite the bot to a server with the permissions you need.</li>
             </ol>
           ) : null}
         </div>
