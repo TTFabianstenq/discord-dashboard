@@ -180,6 +180,17 @@ export type DiscordAuditLogEntry = {
   created_at?: string;
 };
 
+export type DiscordEmoji = {
+  id: string;
+  name: string;
+  roles?: string[];
+  user?: DiscordUser;
+  require_colons?: boolean;
+  managed?: boolean;
+  animated?: boolean;
+  available?: boolean;
+};
+
 export const CHANNEL_TYPES = {
   GUILD_TEXT: 0,
   DM: 1,
@@ -217,6 +228,7 @@ export type GuildTab =
   | "audit"
   | "webhooks"
   | "commands"
+  | "emojis"
   | "server";
 
 export type AppView =
