@@ -1,5 +1,18 @@
-import { useState } from "react";
-import { MoreHorizontal, ShieldOff, UserX, Ban, Clock, UserCog, MicOff, Headphones, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  MoreHorizontal,
+  ShieldOff,
+  UserX,
+  Ban,
+  Clock,
+  UserCog,
+  MicOff,
+  Headphones,
+  Users,
+  Download,
+  Copy,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { discordRequest } from "@/lib/discord/api";
 import { userAvatarUrl } from "@/lib/discord/cdn";
 import { formatRelative } from "@/lib/discord/format";
@@ -42,6 +56,13 @@ const EMPTY_ROLES: DiscordRole[] = [];
 
 type Action = "kick" | "ban" | "timeout" | "untimeout" | "nick" | "roles" | "mute" | "deaf" | null;
 
+const TIMEOUT_PRESETS = [
+  { label: "60 min", minutes: 60 },
+  { label: "1 day", minutes: 1440 },
+  { label: "1 week", minutes: 10080 },
+  { label: "4 weeks", minutes: 40320 },
+];
+
 export function MembersPanel({ guildId }: { guildId: string }) {
   const members = useRelay((s) => s.members[guildId] ?? EMPTY_MEMBERS);
   const roles = useRelay((s) => s.roles[guildId] ?? EMPTY_ROLES);
@@ -54,10 +75,12 @@ export function MembersPanel({ guildId }: { guildId: string }) {
   const timeoutMember = useRelay((s) => s.timeoutMember);
   const editMember = useRelay((s) => s.editMember);
 
+  const [query, setQuery] = useState("");
   const [target, setTarget] = useState<DiscordMember | null>(null);
   const [action, setAction] = useState<Action>(null);
   const [reason, setReason] = useState("");
   const [timeoutMinutes, setTimeoutMinutes] = useState(60);
+  const [banDeleteDays, setBanDeleteDays] = useState(0);
   const [nick, setNick] = useState("");
   const [roleIds, setRoleIds] = useState<string[]>([]);
   const [pruneDays, setPruneDays] = useState(7);
@@ -69,24 +92,68 @@ export function MembersPanel({ guildId }: { guildId: string }) {
   const allowBan = mode === "demo" || canBan(perms);
   const allowTimeout = mode === "demo" || canModerate(perms);
   const allowManage = mode === "demo" || canModerate(perms);
-
   const assignableRoles = roles.filter((r) => r.name !== "@everyone" && !r.managed);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return members;
+    return members.filter((m) => {
+      const u = m.user;
+      if (!u) return false;
+      return (
+        u.username.toLowerCase().includes(q) ||
+        (u.global_name ?? "").toLowerCase().includes(q) ||
+        (m.nick ?? "").toLowerCase().includes(q) ||
+        u.id.includes(q)
+      );
+    });
+  }, [members, query]);
 
   function openAction(m: DiscordMember, a: Action) {
     setTarget(m);
     setAction(a);
     setReason("");
     setTimeoutMinutes(60);
+    setBanDeleteDays(0);
     setNick(m.nick ?? "");
     setRoleIds([...m.roles]);
   }
 
+  function exportCsv() {
+    const rows = [["id", "username", "display", "nick", "bot", "roles", "joined_at"]];
+    for (const m of members) {
+      const u = m.user;
+      if (!u) continue;
+      const roleNames = m.roles
+        .map((id) => roles.find((r) => r.id === id)?.name)
+        .filter(Boolean)
+        .join("|");
+      rows.push([
+        u.id,
+        u.username,
+        u.global_name ?? "",
+        m.nick ?? "",
+        u.bot ? "1" : "0",
+        roleNames,
+        m.joined_at ?? "",
+      ]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `members-${guildId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${members.length} members`);
+  }
+
   async function runPrune() {
-    if (mode === "demo") {
+    if (mode === "demo" || !token) {
       toast.message("Connect a live bot to prune");
       return;
     }
-    if (!token) return;
     setPruneBusy(true);
     try {
       const res = (await discordRequest({
@@ -97,10 +164,10 @@ export function MembersPanel({ guildId }: { guildId: string }) {
           body: { days: pruneDays, compute_prune_count: true },
         },
       })) as { pruned?: number };
-      toast.success(`Pruned ${res.pruned ?? 0} members (inactive ${pruneDays}d)`);
+      toast.success(`Pruned ${res.pruned ?? 0} members`);
       setPruneOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Prune failed (need Kick Members)");
+      toast.error(err instanceof Error ? err.message : "Prune failed");
     } finally {
       setPruneBusy(false);
     }
@@ -114,7 +181,10 @@ export function MembersPanel({ guildId }: { guildId: string }) {
         await kickMember(guildId, userId, reason || undefined);
         toast.success(`Kicked ${target.user.username}`);
       } else if (action === "ban") {
-        await banMember(guildId, userId, { reason: reason || undefined, delete_message_seconds: 0 });
+        await banMember(guildId, userId, {
+          reason: reason || undefined,
+          delete_message_seconds: banDeleteDays * 86400,
+        });
         toast.success(`Banned ${target.user.username}`);
       } else if (action === "timeout") {
         const until = new Date(Date.now() + timeoutMinutes * 60_000).toISOString();
@@ -122,7 +192,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
         toast.success(`Timed out ${target.user.username}`);
       } else if (action === "untimeout") {
         await timeoutMember(guildId, userId, null);
-        toast.success(`Removed timeout`);
+        toast.success("Removed timeout");
       } else if (action === "nick") {
         await editMember(guildId, userId, { nick: nick.trim() || null });
         toast.success("Nickname updated");
@@ -150,24 +220,41 @@ export function MembersPanel({ guildId }: { guildId: string }) {
           <h2 className="font-serif text-2xl tracking-tight">Members</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {members.length > 0
-              ? `${members.length} loaded — nick, roles, mute, kick, ban, timeout, prune`
+              ? `${filtered.length}/${members.length} shown — search, export, moderate`
               : mode === "live"
-                ? "Enable Server Members Intent on the bot to list people."
+                ? "Enable Server Members Intent to list people."
                 : "No members in this sample roster."}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setPruneOpen(true)}>
-          <Users className="size-4" />
-          Prune inactive
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={members.length === 0}>
+            <Download className="size-4" />
+            Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setPruneOpen(true)}>
+            <Users className="size-4" />
+            Prune
+          </Button>
+        </div>
       </div>
-      {members.length === 0 ? (
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search name, nick, or ID…"
+          className="pl-9"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-5 py-12 text-center text-sm text-muted-foreground">
-          Nothing to show here yet.
+          Nothing to show.
         </div>
       ) : (
         <ul className="overflow-hidden rounded-xl border border-border">
-          {members.map((m) => {
+          {filtered.map((m) => {
             const u = m.user;
             if (!u) return null;
             const isSelf = u.id === botId;
@@ -194,6 +281,21 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                     {m.joined_at ? ` · joined ${formatRelative(m.joined_at)}` : ""}
                   </p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Copy user ID"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(u.id);
+                      toast.success("User ID copied");
+                    } catch {
+                      toast.error("Could not copy");
+                    }
+                  }}
+                >
+                  <Copy className="size-4" />
+                </Button>
                 {!isSelf ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -205,20 +307,16 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                       {allowManage ? (
                         <>
                           <DropdownMenuItem onClick={() => openAction(m, "nick")}>
-                            <UserCog className="size-4" />
-                            Nickname
+                            <UserCog className="size-4" /> Nickname
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openAction(m, "roles")}>
-                            <UserCog className="size-4" />
-                            Roles
+                            <UserCog className="size-4" /> Roles
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openAction(m, "mute")}>
-                            <MicOff className="size-4" />
-                            Server mute
+                            <MicOff className="size-4" /> Server mute
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openAction(m, "deaf")}>
-                            <Headphones className="size-4" />
-                            Server deafen
+                            <Headphones className="size-4" /> Server deafen
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                         </>
@@ -226,28 +324,24 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                       {allowTimeout ? (
                         timedOut ? (
                           <DropdownMenuItem onClick={() => openAction(m, "untimeout")}>
-                            <ShieldOff className="size-4" />
-                            Remove timeout
+                            <ShieldOff className="size-4" /> Remove timeout
                           </DropdownMenuItem>
                         ) : (
                           <DropdownMenuItem onClick={() => openAction(m, "timeout")}>
-                            <Clock className="size-4" />
-                            Timeout
+                            <Clock className="size-4" /> Timeout
                           </DropdownMenuItem>
                         )
                       ) : null}
                       {allowKick ? (
                         <DropdownMenuItem onClick={() => openAction(m, "kick")}>
-                          <UserX className="size-4" />
-                          Kick
+                          <UserX className="size-4" /> Kick
                         </DropdownMenuItem>
                       ) : null}
                       {allowBan ? (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive" onClick={() => openAction(m, "ban")}>
-                            <Ban className="size-4" />
-                            Ban
+                            <Ban className="size-4" /> Ban
                           </DropdownMenuItem>
                         </>
                       ) : null}
@@ -264,25 +358,14 @@ export function MembersPanel({ guildId }: { guildId: string }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Prune inactive members</DialogTitle>
-            <DialogDescription>
-              Removes members with no roles who have been inactive for the given number of days. Needs Kick Members.
-            </DialogDescription>
+            <DialogDescription>Removes members with no roles inactive for N days.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">
-            <Label htmlFor="prune-days">Days of inactivity</Label>
-            <Input
-              id="prune-days"
-              type="number"
-              min={1}
-              max={30}
-              value={pruneDays}
-              onChange={(e) => setPruneDays(Number(e.target.value) || 7)}
-            />
+            <Label htmlFor="prune-days">Days</Label>
+            <Input id="prune-days" type="number" min={1} max={30} value={pruneDays} onChange={(e) => setPruneDays(Number(e.target.value) || 7)} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPruneOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setPruneOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={() => void runPrune()} disabled={pruneBusy}>
               {pruneBusy ? "Pruning…" : "Prune"}
             </Button>
@@ -308,26 +391,35 @@ export function MembersPanel({ guildId }: { guildId: string }) {
               {action === "nick" && `Nickname for ${target?.user?.username}`}
               {action === "roles" && `Roles for ${target?.user?.username}`}
             </DialogTitle>
-            <DialogDescription>
-              {action === "roles"
-                ? "Toggle roles. Managed roles are hidden."
-                : action === "nick"
-                  ? "Leave empty to clear the nickname."
-                  : "Confirm this moderation action."}
-            </DialogDescription>
+            <DialogDescription>Confirm this action.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             {action === "timeout" ? (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {TIMEOUT_PRESETS.map((p) => (
+                    <Button key={p.minutes} type="button" size="sm" variant={timeoutMinutes === p.minutes ? "secondary" : "outline"} onClick={() => setTimeoutMinutes(p.minutes)}>
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="timeout-min">Minutes</Label>
+                  <Input id="timeout-min" type="number" min={1} max={40320} value={timeoutMinutes} onChange={(e) => setTimeoutMinutes(Number(e.target.value) || 60)} />
+                </div>
+              </>
+            ) : null}
+            {action === "ban" ? (
               <div className="grid gap-1.5">
-                <Label htmlFor="timeout-min">Duration (minutes)</Label>
-                <Input
-                  id="timeout-min"
-                  type="number"
-                  min={1}
-                  max={40320}
-                  value={timeoutMinutes}
-                  onChange={(e) => setTimeoutMinutes(Number(e.target.value) || 60)}
-                />
+                <Label>Delete message history</Label>
+                <Select value={String(banDeleteDays)} onValueChange={(v) => setBanDeleteDays(Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Don't delete</SelectItem>
+                    <SelectItem value="1">Last 24 hours</SelectItem>
+                    <SelectItem value="7">Last 7 days</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             ) : null}
             {action === "nick" ? (
@@ -344,12 +436,8 @@ export function MembersPanel({ guildId }: { guildId: string }) {
                     <li key={r.id}>
                       <button
                         type="button"
-                        onClick={() =>
-                          setRoleIds((cur) => (on ? cur.filter((id) => id !== r.id) : [...cur, r.id]))
-                        }
-                        className={`flex w-full items-center rounded-md border px-3 py-2 text-left text-sm ${
-                          on ? "border-stone/50 bg-stone/10" : "border-border"
-                        }`}
+                        onClick={() => setRoleIds((cur) => (on ? cur.filter((id) => id !== r.id) : [...cur, r.id]))}
+                        className={`flex w-full items-center rounded-md border px-3 py-2 text-left text-sm ${on ? "border-stone/50 bg-stone/10" : "border-border"}`}
                       >
                         {r.name}
                       </button>
@@ -366,12 +454,8 @@ export function MembersPanel({ guildId }: { guildId: string }) {
             ) : null}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setAction(null); setTarget(null); }}>
-              Cancel
-            </Button>
-            <Button variant={action === "ban" ? "destructive" : "default"} onClick={() => void confirm()}>
-              Confirm
-            </Button>
+            <Button variant="outline" onClick={() => { setAction(null); setTarget(null); }}>Cancel</Button>
+            <Button variant={action === "ban" ? "destructive" : "default"} onClick={() => void confirm()}>Confirm</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -392,11 +476,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
               {action === "mute" && `Server mute ${target?.user?.username}?`}
               {action === "deaf" && `Server deafen ${target?.user?.username}?`}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {action === "mute" || action === "deaf"
-                ? "Server-wide voice flag. Needs Mute/Deafen Members."
-                : "They can chat again immediately."}
-            </AlertDialogDescription>
+            <AlertDialogDescription>Confirm this moderation action.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
