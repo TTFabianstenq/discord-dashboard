@@ -9,6 +9,7 @@ import { useRelay } from "@/lib/discord/store";
 import type { GuildTab } from "@/lib/discord/types";
 import { cn } from "@/lib/utils";
 import { AuditPanel } from "./audit-panel";
+import { AutomodPanel } from "./automod-panel";
 import { BansPanel } from "./bans-panel";
 import { BotSettings } from "./bot-settings";
 import { ChannelManager } from "./channel-manager";
@@ -17,12 +18,14 @@ import { Chat } from "./chat";
 import { CommandManager } from "./command-manager";
 import { EmojisPanel } from "./emojis-panel";
 import { EntityAvatar } from "./entity-avatar";
+import { EventsPanel } from "./events-panel";
 import { InvitesPanel } from "./invites-panel";
 import { MembersPanel } from "./members-panel";
 import { RelayMark } from "./mark";
 import { Overview } from "./overview";
 import { RoleManager } from "./role-manager";
 import { ServerSettings } from "./server-settings";
+import { StickersPanel } from "./stickers-panel";
 import { WebhookManager } from "./webhook-manager";
 
 const EMPTY: never[] = [];
@@ -38,6 +41,9 @@ const TABS: { id: GuildTab; label: string }[] = [
   { id: "webhooks", label: "Webhooks" },
   { id: "commands", label: "Commands" },
   { id: "emojis", label: "Emojis" },
+  { id: "stickers", label: "Stickers" },
+  { id: "automod", label: "AutoMod" },
+  { id: "events", label: "Events" },
   { id: "server", label: "Server" },
 ];
 
@@ -148,13 +154,9 @@ export function Console() {
           <span className="font-serif text-base">BotDeck</span>
         </span>
         {mode === "demo" ? (
-          <span className="hidden rounded-full bg-stone/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone sm:inline">
-            Sample
-          </span>
+          <span className="hidden rounded-full bg-stone/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone sm:inline">Sample</span>
         ) : (
-          <span className="hidden rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-success sm:inline">
-            Live
-          </span>
+          <span className="hidden rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-success sm:inline">Live</span>
         )}
         {voiceInfo ? (
           <span className="hidden items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-success sm:inline-flex">
@@ -238,6 +240,9 @@ export function Console() {
               {view.tab === "webhooks" ? <WebhookManager guildId={guild.id} /> : null}
               {view.tab === "commands" ? <CommandManager guildId={guild.id} /> : null}
               {view.tab === "emojis" ? <EmojisPanel guildId={guild.id} /> : null}
+              {view.tab === "stickers" ? <StickersPanel guildId={guild.id} /> : null}
+              {view.tab === "automod" ? <AutomodPanel guildId={guild.id} /> : null}
+              {view.tab === "events" ? <EventsPanel guildId={guild.id} /> : null}
               {view.tab === "server" ? <ServerSettings guildId={guild.id} /> : null}
             </>
           ) : null}
