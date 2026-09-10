@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Headphones, Mic, MicOff, PhoneOff, Volume2, VolumeX } from "lucide-react";
+import { Headphones, Mic, MicOff, PhoneOff, RefreshCw, Volume2, VolumeX } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { discordRequest } from "@/lib/discord/api";
 import { userAvatarUrl } from "@/lib/discord/cdn";
 import { getGateway } from "@/lib/discord/gateway";
 import { CHANNEL_TYPES } from "@/lib/discord/types";
@@ -19,6 +20,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
   const voiceStates = useRelay((s) => s.voiceStates[guildId] ?? EMPTY_VS);
   const members = useRelay((s) => s.members[guildId] ?? EMPTY);
   const bot = useRelay((s) => s.bot);
+  const token = useRelay((s) => s.token);
   const joinVoice = useRelay((s) => s.joinVoice);
   const leaveVoice = useRelay((s) => s.leaveVoice);
   const mode = useRelay((s) => s.mode);
@@ -40,13 +42,21 @@ export function VoicePanel({ guildId }: { guildId: string }) {
   const active = voiceChannels.find((c) => c.id === voiceChannelId);
   const inThisGuild = Boolean(active);
   const selectValue = selected || voiceChannelId || voiceChannels[0]?.id || "";
-
-  const rosterChannelId = inThisGuild ? voiceChannelId : selectValue;
+  const rosterChannelId = selectValue;
 
   const peopleInChannel = useMemo(() => {
     if (!rosterChannelId) return [] as VoiceStateEntry[];
     return voiceStates.filter((v) => v.channel_id === rosterChannelId);
   }, [voiceStates, rosterChannelId]);
+
+  const occupancy = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const v of voiceStates) {
+      if (!v.channel_id) continue;
+      map.set(v.channel_id, (map.get(v.channel_id) ?? 0) + 1);
+    }
+    return map;
+  }, [voiceStates]);
 
   function displayName(v: VoiceStateEntry): string {
     if (v.nick) return v.nick;
@@ -57,7 +67,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     if (m?.user?.global_name) return m.user.global_name;
     if (m?.user?.username) return m.user.username;
     if (bot?.id === v.user_id) return bot.username;
-    return v.user_id;
+    return `User ${v.user_id.slice(-4)}`;
   }
 
   function sendVoiceState(channelId: string | null, mute: boolean, deaf: boolean) {
@@ -68,6 +78,56 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     }
     gw.updateVoiceState(guildId, channelId, mute, deaf);
     return true;
+  }
+
+  function refreshRoster() {
+    const gw = getGateway();
+    if (!gw) {
+      toast.error("Gateway not ready — disconnect and log in again");
+      return;
+    }
+    toast.message("Refreshing voice states…");
+    gw.forceReconnect();
+  }
+
+  async function disconnectUser(userId: string) {
+    if (mode === "demo" || !token) {
+      toast.message("Live bot required");
+      return;
+    }
+    try {
+      await discordRequest({
+        data: {
+          token,
+          method: "PATCH",
+          path: `/guilds/${guildId}/members/${userId}`,
+          body: { channel_id: null },
+        },
+      });
+      toast.success("Disconnected from voice");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Need Move Members permission");
+    }
+  }
+
+  async function moveUser(userId: string, channelId: string) {
+    if (mode === "demo" || !token) {
+      toast.message("Live bot required");
+      return;
+    }
+    try {
+      await discordRequest({
+        data: {
+          token,
+          method: "PATCH",
+          path: `/guilds/${guildId}/members/${userId}`,
+          body: { channel_id: channelId },
+        },
+      });
+      toast.success("Moved member");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Need Move Members permission");
+    }
   }
 
   async function onJoin() {
@@ -162,16 +222,23 @@ export function VoicePanel({ guildId }: { guildId: string }) {
                 In VC
               </span>
             ) : null}
+            <span className="text-[10px] text-muted-foreground">
+              {voiceStates.length} tracked in server
+            </span>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Join / leave, mute, deafen, and see who is in the channel. Keep this tab open. No audio from the site.
+            Join / leave, see who is in each VC, move or disconnect people (Move Members). No audio from the site.
           </p>
         </div>
+        <Button type="button" variant="outline" size="sm" onClick={refreshRoster} disabled={mode !== "live"}>
+          <RefreshCw className="size-4" />
+          Roster
+        </Button>
       </div>
 
       {mode === "live" && !gatewayConnected ? (
         <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-          Gateway not connected yet — voice roster and join need the gateway. Wait or reconnect.
+          Gateway not connected — press Roster or disconnect and log in again.
         </p>
       ) : null}
 
@@ -179,10 +246,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
         <div className="mt-3 rounded-lg border border-success/30 bg-background/50 px-3 py-2.5">
           <p className="text-sm font-medium text-foreground">Connected to #{active.name}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {selfMute ? "Muted" : "Unmuted"}
-            {" · "}
-            {selfDeaf ? "Deafened" : "Undeafened"}
-            {" · keep this tab open"}
+            {selfMute ? "Muted" : "Unmuted"} · {selfDeaf ? "Deafened" : "Undeafened"} · keep this tab open
           </p>
         </div>
       ) : (
@@ -198,7 +262,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
             </SelectTrigger>
             <SelectContent>
               {voiceChannels.map((c) => {
-                const count = voiceStates.filter((v) => v.channel_id === c.id).length;
+                const count = occupancy.get(c.id) ?? 0;
                 return (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
@@ -234,6 +298,28 @@ export function VoicePanel({ guildId }: { guildId: string }) {
         </Button>
       </div>
 
+      {voiceChannels.length > 0 ? (
+        <div className="mt-4 grid gap-1 border-t border-border/60 pt-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">All voice channels</p>
+          <ul className="mt-1 space-y-1">
+            {voiceChannels.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => setSelected(c.id)}
+                  className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm ${
+                    c.id === rosterChannelId ? "bg-secondary" : "hover:bg-secondary/60"
+                  }`}
+                >
+                  <span className="truncate">#{c.name}</span>
+                  <span className="text-xs text-muted-foreground">{occupancy.get(c.id) ?? 0}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="mt-4 border-t border-border/60 pt-3">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           In {rosterTitle ? `#${rosterTitle}` : "channel"}
@@ -242,9 +328,14 @@ export function VoicePanel({ guildId }: { guildId: string }) {
         {mode === "demo" ? (
           <p className="mt-2 text-sm text-muted-foreground">Sample mode has no live voice roster.</p>
         ) : !gatewayConnected ? (
-          <p className="mt-2 text-sm text-muted-foreground">Waiting for gateway…</p>
+          <p className="mt-2 text-sm text-muted-foreground">Waiting for gateway… hit Roster.</p>
         ) : peopleInChannel.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">Nobody in this channel right now.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Nobody in this channel
+            {voiceStates.length === 0
+              ? " — if people are in VC on Discord, hit Roster (or disconnect + log in again)."
+              : "."}
+          </p>
         ) : (
           <ul className="mt-2 space-y-1.5">
             {peopleInChannel.map((v) => {
@@ -260,7 +351,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
                     })
                   : null;
               return (
-                <li key={v.user_id} className="flex items-center gap-2 rounded-md bg-background/40 px-2 py-1.5">
+                <li key={v.user_id} className="flex flex-wrap items-center gap-2 rounded-md bg-background/40 px-2 py-1.5">
                   <EntityAvatar name={name} id={v.user_id} src={avatar} size="sm" />
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {name}
@@ -271,6 +362,28 @@ export function VoicePanel({ guildId }: { guildId: string }) {
                     {(v.self_mute || v.mute) && (v.self_deaf || v.deaf) ? " · " : ""}
                     {v.self_deaf || v.deaf ? "deaf" : ""}
                   </span>
+                  {!isBot ? (
+                    <div className="flex gap-1">
+                      <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void disconnectUser(v.user_id)}>
+                        Kick VC
+                      </Button>
+                      {voiceChannels
+                        .filter((c) => c.id !== rosterChannelId)
+                        .slice(0, 2)
+                        .map((c) => (
+                          <Button
+                            key={c.id}
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs"
+                            onClick={() => void moveUser(v.user_id, c.id)}
+                          >
+                            → {c.name}
+                          </Button>
+                        ))}
+                    </div>
+                  ) : null}
                 </li>
               );
             })}
