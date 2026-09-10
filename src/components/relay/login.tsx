@@ -130,6 +130,16 @@ export function LoginScreen() {
               Try a sample bot
             </Button>
 
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100">
+              <p className="font-medium text-amber-50">To read other people’s messages in chat</p>
+              <p className="mt-1 text-amber-100/90">
+                Discord blocks message text unless you turn on{" "}
+                <strong>Message Content Intent</strong> once in the Developer Portal (Bot → Privileged Gateway
+                Intents). Without it, Discord only sends usernames — empty content is Discord’s rule, not a BotDeck
+                bug. Under 100 servers this is a free toggle; no Discord approval needed.
+              </p>
+            </div>
+
             <div className="flex items-start gap-2 rounded-md bg-secondary/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <Shield className="mt-0.5 size-3.5 shrink-0 text-stone" />
               <span>
@@ -144,14 +154,17 @@ export function LoginScreen() {
             onClick={() => setGuide((v) => !v)}
             className="mt-5 text-left text-xs font-medium text-stone hover:underline"
           >
-            {guide ? "Hide token steps" : "How to get a bot token"}
+            {guide ? "Hide setup steps" : "Full setup (token + intents)"}
           </button>
           {guide ? (
             <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
               <li>Open the Discord Developer Portal and select (or create) an application.</li>
-              <li>Open the Bot tab and copy the token. Reset it if you do not have one saved.</li>
-              <li>Turn on Message Content Intent if you want the bot to read message text.</li>
-              <li>Invite the bot to a server with Manage Channels and Send Messages.</li>
+              <li>Open the Bot tab and copy the token.</li>
+              <li>
+                Under Privileged Gateway Intents enable <strong>Message Content Intent</strong> (needed to see message
+                text) and <strong>Server Members Intent</strong> if you want the members list.
+              </li>
+              <li>Invite the bot to a server with Send Messages / Manage Channels as needed.</li>
             </ol>
           ) : null}
         </div>
