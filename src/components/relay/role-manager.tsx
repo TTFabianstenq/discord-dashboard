@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,13 +100,22 @@ export function RoleManager({ guildId }: { guildId: string }) {
     }
   }
 
+  async function copyText(label: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error("Could not copy");
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-serif text-2xl tracking-tight">Roles</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create and edit roles. Managed roles (integrations) cannot be deleted.
+            Create and edit roles. Copy ID or &lt;@&amp;id&gt; mention.
             {!allowed && mode === "live" ? " The bot needs Manage Roles." : ""}
           </p>
         </div>
@@ -126,14 +135,8 @@ export function RoleManager({ guildId }: { guildId: string }) {
             const color = role.color ? intToHex(role.color) : "#99aab5";
             const isEveryone = role.id === guildId;
             return (
-              <li
-                key={role.id}
-                className="flex items-center gap-3 border-b border-border px-3 py-2.5 last:border-b-0"
-              >
-                <span
-                  className="size-3 shrink-0 rounded-full border border-border"
-                  style={{ background: color }}
-                />
+              <li key={role.id} className="flex items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0">
+                <span className="size-3 shrink-0 rounded-full border border-border" style={{ background: color }} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium" style={{ color: role.color ? color : undefined }}>
                     {role.name}
@@ -145,24 +148,30 @@ export function RoleManager({ guildId }: { guildId: string }) {
                     {role.managed ? " · managed" : ""}
                   </p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Copy role ID"
+                  onClick={() => void copyText("Role ID", role.id)}
+                >
+                  <Copy className="size-4" />
+                </Button>
+                {!isEveryone ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="hidden text-xs sm:inline-flex"
+                    onClick={() => void copyText("Role mention", `<@&${role.id}>`)}
+                  >
+                    @mention
+                  </Button>
+                ) : null}
                 {!isEveryone && !role.managed ? (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => startEdit(role)}
-                      disabled={!allowed}
-                      aria-label="Edit role"
-                    >
+                    <Button variant="ghost" size="icon-sm" onClick={() => startEdit(role)} disabled={!allowed} aria-label="Edit role">
                       <Pencil className="size-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setPendingDelete(role)}
-                      disabled={!allowed}
-                      aria-label="Delete role"
-                    >
+                    <Button variant="ghost" size="icon-sm" onClick={() => setPendingDelete(role)} disabled={!allowed} aria-label="Delete role">
                       <Trash2 className="size-4" />
                     </Button>
                   </>
@@ -178,53 +187,29 @@ export function RoleManager({ guildId }: { guildId: string }) {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit role" : "New role"}</DialogTitle>
             <DialogDescription>
-              {editing
-                ? "Changes apply immediately on the live server."
-                : "The bot can only manage roles below its highest role."}
+              {editing ? "Changes apply immediately on the live server." : "The bot can only manage roles below its highest role."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="role-name">Name</Label>
-              <Input
-                id="role-name"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="Moderator"
-                maxLength={100}
-              />
+              <Input id="role-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Moderator" maxLength={100} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="role-color">Color</Label>
-              <Input
-                id="role-color"
-                type="color"
-                value={draft.color}
-                onChange={(e) => setDraft({ ...draft, color: e.target.value })}
-                className="h-11 w-20 p-1"
-              />
+              <Input id="role-color" type="color" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="h-11 w-20 p-1" />
             </div>
             <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
               <Label htmlFor="role-hoist">Display role members separately</Label>
-              <Switch
-                id="role-hoist"
-                checked={draft.hoist}
-                onCheckedChange={(v) => setDraft({ ...draft, hoist: v })}
-              />
+              <Switch id="role-hoist" checked={draft.hoist} onCheckedChange={(v) => setDraft({ ...draft, hoist: v })} />
             </div>
             <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
               <Label htmlFor="role-mention">Allow anyone to @mention this role</Label>
-              <Switch
-                id="role-mention"
-                checked={draft.mentionable}
-                onCheckedChange={(v) => setDraft({ ...draft, mentionable: v })}
-              />
+              <Switch id="role-mention" checked={draft.mentionable} onCheckedChange={(v) => setDraft({ ...draft, mentionable: v })} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={() => void save()}>{editing ? "Save" : "Create"}</Button>
           </DialogFooter>
         </DialogContent>
@@ -234,9 +219,7 @@ export function RoleManager({ guildId }: { guildId: string }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete role {pendingDelete?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Members with only this role will keep other roles. This cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
