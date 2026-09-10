@@ -8,12 +8,15 @@ import { isTextLike } from "@/lib/discord/format";
 import { useRelay } from "@/lib/discord/store";
 import type { GuildTab } from "@/lib/discord/types";
 import { cn } from "@/lib/utils";
+import { AuditPanel } from "./audit-panel";
+import { BansPanel } from "./bans-panel";
 import { BotSettings } from "./bot-settings";
 import { ChannelManager } from "./channel-manager";
 import { ChannelTree } from "./channel-tree";
 import { Chat } from "./chat";
 import { CommandManager } from "./command-manager";
 import { EntityAvatar } from "./entity-avatar";
+import { InvitesPanel } from "./invites-panel";
 import { MembersPanel } from "./members-panel";
 import { RelayMark } from "./mark";
 import { Overview } from "./overview";
@@ -28,6 +31,9 @@ const TABS: { id: GuildTab; label: string }[] = [
   { id: "channels", label: "Channels" },
   { id: "roles", label: "Roles" },
   { id: "members", label: "Members" },
+  { id: "bans", label: "Bans" },
+  { id: "invites", label: "Invites" },
+  { id: "audit", label: "Audit" },
   { id: "webhooks", label: "Webhooks" },
   { id: "commands", label: "Commands" },
   { id: "server", label: "Server" },
@@ -163,6 +169,9 @@ export function Console() {
               {view.tab === "channels" ? <ChannelManager guildId={guild.id} /> : null}
               {view.tab === "roles" ? <RoleManager guildId={guild.id} /> : null}
               {view.tab === "members" ? <MembersPanel guildId={guild.id} /> : null}
+              {view.tab === "bans" ? <BansPanel guildId={guild.id} /> : null}
+              {view.tab === "invites" ? <InvitesPanel guildId={guild.id} /> : null}
+              {view.tab === "audit" ? <AuditPanel guildId={guild.id} /> : null}
               {view.tab === "webhooks" ? <WebhookManager guildId={guild.id} /> : null}
               {view.tab === "commands" ? <CommandManager guildId={guild.id} /> : null}
               {view.tab === "server" ? <ServerSettings guildId={guild.id} /> : null}
