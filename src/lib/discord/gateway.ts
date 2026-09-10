@@ -1,6 +1,6 @@
 /**
- * Minimal Discord Gateway client for the browser.
- * Presence (op 3) and voice state (op 4) while the BotDeck tab is open.
+ * Discord Gateway client (browser).
+ * Presence (op 3), voice state (op 4), and voice roster via GUILD_VOICE_STATES.
  */
 
 export type PresenceStatus = "online" | "idle" | "dnd" | "invisible";
@@ -16,14 +16,39 @@ export type PresencePayload = {
   afk?: boolean;
 };
 
+export type GatewayVoiceState = {
+  guild_id?: string;
+  channel_id: string | null;
+  user_id: string;
+  session_id?: string;
+  deaf?: boolean;
+  mute?: boolean;
+  self_deaf?: boolean;
+  self_mute?: boolean;
+  member?: {
+    nick?: string | null;
+    user?: {
+      id: string;
+      username: string;
+      global_name?: string | null;
+      avatar: string | null;
+      bot?: boolean;
+      discriminator?: string;
+    };
+  };
+};
+
 type GatewayHandlers = {
   onReady?: () => void;
   onClose?: (code: number, reason: string) => void;
   onError?: (message: string) => void;
+  onVoiceStateUpdate?: (state: GatewayVoiceState) => void;
+  onGuildVoiceStates?: (guildId: string, states: GatewayVoiceState[]) => void;
 };
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
-const INTENTS = 0;
+/** GUILDS (1) + GUILD_VOICE_STATES (128) — required to list who is in VC */
+const INTENTS = 1 | 128;
 
 const DEFAULT_PRESENCE: PresencePayload = {
   status: "online",
@@ -85,14 +110,7 @@ export class DiscordGateway {
           case 11:
             break;
           case 0:
-            if (packet.t === "READY") {
-              const d = packet.d as { session_id: string };
-              this.sessionId = d.session_id;
-              this.reconnectAttempts = 0;
-              this.pushPresence();
-              this.startPresenceRefresh();
-              this.handlers.onReady?.();
-            }
+            this.handleDispatch(packet.t, packet.d);
             break;
           case 9:
             this.handlers.onError?.("Gateway session invalid. Reconnecting…");
@@ -119,6 +137,28 @@ export class DiscordGateway {
         this.scheduleReconnect(false);
       }
     };
+  }
+
+  private handleDispatch(t: string | null, d: unknown): void {
+    if (t === "READY") {
+      const data = d as { session_id: string };
+      this.sessionId = data.session_id;
+      this.reconnectAttempts = 0;
+      this.pushPresence();
+      this.startPresenceRefresh();
+      this.handlers.onReady?.();
+      return;
+    }
+    if (t === "GUILD_CREATE") {
+      const guild = d as { id: string; voice_states?: GatewayVoiceState[] };
+      if (guild?.id && Array.isArray(guild.voice_states)) {
+        this.handlers.onGuildVoiceStates?.(guild.id, guild.voice_states);
+      }
+      return;
+    }
+    if (t === "VOICE_STATE_UPDATE") {
+      this.handlers.onVoiceStateUpdate?.(d as GatewayVoiceState);
+    }
   }
 
   disconnect(): void {
