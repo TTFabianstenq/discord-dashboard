@@ -229,6 +229,9 @@ export type GuildTab =
   | "webhooks"
   | "commands"
   | "emojis"
+  | "stickers"
+  | "automod"
+  | "events"
   | "server";
 
 export type AppView =
