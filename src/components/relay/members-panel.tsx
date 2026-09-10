@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MoreHorizontal, ShieldOff, UserX, Ban, Clock, UserCog, MicOff, Headphones } from "lucide-react";
+import { MoreHorizontal, ShieldOff, UserX, Ban, Clock, UserCog, MicOff, Headphones, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { discordRequest } from "@/lib/discord/api";
 import { userAvatarUrl } from "@/lib/discord/cdn";
 import { formatRelative } from "@/lib/discord/format";
 import { canBan, canKick, canModerate } from "@/lib/discord/permissions";
@@ -47,6 +48,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
   const guild = useRelay((s) => s.guilds.find((g) => g.id === guildId));
   const botId = useRelay((s) => s.bot?.id);
   const mode = useRelay((s) => s.mode);
+  const token = useRelay((s) => s.token);
   const kickMember = useRelay((s) => s.kickMember);
   const banMember = useRelay((s) => s.banMember);
   const timeoutMember = useRelay((s) => s.timeoutMember);
@@ -58,6 +60,9 @@ export function MembersPanel({ guildId }: { guildId: string }) {
   const [timeoutMinutes, setTimeoutMinutes] = useState(60);
   const [nick, setNick] = useState("");
   const [roleIds, setRoleIds] = useState<string[]>([]);
+  const [pruneDays, setPruneDays] = useState(7);
+  const [pruneOpen, setPruneOpen] = useState(false);
+  const [pruneBusy, setPruneBusy] = useState(false);
 
   const perms = guild?.permissions;
   const allowKick = mode === "demo" || canKick(perms);
@@ -74,6 +79,31 @@ export function MembersPanel({ guildId }: { guildId: string }) {
     setTimeoutMinutes(60);
     setNick(m.nick ?? "");
     setRoleIds([...m.roles]);
+  }
+
+  async function runPrune() {
+    if (mode === "demo") {
+      toast.message("Connect a live bot to prune");
+      return;
+    }
+    if (!token) return;
+    setPruneBusy(true);
+    try {
+      const res = (await discordRequest({
+        data: {
+          token,
+          method: "POST",
+          path: `/guilds/${guildId}/prune`,
+          body: { days: pruneDays, compute_prune_count: true },
+        },
+      })) as { pruned?: number };
+      toast.success(`Pruned ${res.pruned ?? 0} members (inactive ${pruneDays}d)`);
+      setPruneOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Prune failed (need Kick Members)");
+    } finally {
+      setPruneBusy(false);
+    }
   }
 
   async function confirm() {
@@ -115,15 +145,21 @@ export function MembersPanel({ guildId }: { guildId: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-8">
-      <div>
-        <h2 className="font-serif text-2xl tracking-tight">Members</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {members.length > 0
-            ? `${members.length} loaded — nick, roles, server mute/deafen, kick, ban, timeout`
-            : mode === "live"
-              ? "Enable Server Members Intent on the bot to list people."
-              : "No members in this sample roster."}
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="font-serif text-2xl tracking-tight">Members</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {members.length > 0
+              ? `${members.length} loaded — nick, roles, mute, kick, ban, timeout, prune`
+              : mode === "live"
+                ? "Enable Server Members Intent on the bot to list people."
+                : "No members in this sample roster."}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setPruneOpen(true)}>
+          <Users className="size-4" />
+          Prune inactive
+        </Button>
       </div>
       {members.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-5 py-12 text-center text-sm text-muted-foreground">
@@ -224,6 +260,36 @@ export function MembersPanel({ guildId }: { guildId: string }) {
         </ul>
       )}
 
+      <Dialog open={pruneOpen} onOpenChange={setPruneOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Prune inactive members</DialogTitle>
+            <DialogDescription>
+              Removes members with no roles who have been inactive for the given number of days. Needs Kick Members.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="prune-days">Days of inactivity</Label>
+            <Input
+              id="prune-days"
+              type="number"
+              min={1}
+              max={30}
+              value={pruneDays}
+              onChange={(e) => setPruneDays(Number(e.target.value) || 7)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPruneOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void runPrune()} disabled={pruneBusy}>
+              {pruneBusy ? "Pruning…" : "Prune"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog
         open={action === "timeout" || action === "kick" || action === "ban" || action === "nick" || action === "roles"}
         onOpenChange={(o) => {
@@ -244,7 +310,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
             </DialogTitle>
             <DialogDescription>
               {action === "roles"
-                ? "Toggle roles. Managed roles (bots/integrations) are hidden."
+                ? "Toggle roles. Managed roles are hidden."
                 : action === "nick"
                   ? "Leave empty to clear the nickname."
                   : "Confirm this moderation action."}
@@ -328,7 +394,7 @@ export function MembersPanel({ guildId }: { guildId: string }) {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {action === "mute" || action === "deaf"
-                ? "This is a server-wide voice flag (not the bot self-mute). Needs Mute Members / Deafen Members."
+                ? "Server-wide voice flag. Needs Mute/Deafen Members."
                 : "They can chat again immediately."}
             </AlertDialogDescription>
           </AlertDialogHeader>
