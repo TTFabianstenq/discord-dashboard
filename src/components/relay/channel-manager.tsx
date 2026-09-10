@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Headphones, Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Headphones, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,6 +96,22 @@ export function ChannelManager({ guildId }: { guildId: string }) {
     setOpen(true);
   }
 
+  async function cloneChannel(ch: DiscordChannel) {
+    try {
+      await createChannel(guildId, {
+        name: `${ch.name ?? "channel"}-copy`,
+        type: ch.type,
+        topic: ch.topic ?? undefined,
+        parent_id: ch.parent_id ?? undefined,
+        nsfw: ch.nsfw,
+        rate_limit_per_user: ch.rate_limit_per_user,
+      } as Partial<DiscordChannel> & { name: string; type: number });
+      toast.success("Channel cloned");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not clone");
+    }
+  }
+
   async function save() {
     try {
       if (!draft.name.trim()) throw new Error("Name is required.");
@@ -130,7 +146,7 @@ export function ChannelManager({ guildId }: { guildId: string }) {
         <div>
           <h2 className="font-serif text-2xl tracking-tight">Channels</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create, rename, move, or delete channels. Voice rows have a Join button (bot appears in VC; no audio from this site).
+            Create, clone, rename, slowmode, NSFW, delete. Voice rows can Join.
           </p>
         </div>
         <Button onClick={startCreate}>
@@ -141,15 +157,12 @@ export function ChannelManager({ guildId }: { guildId: string }) {
 
       {sorted.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-5 py-12 text-center text-sm text-muted-foreground">
-          No channels loaded. If this is a live bot, it may lack View Channel permission.
+          No channels loaded.
         </div>
       ) : (
         <ul className="overflow-hidden rounded-xl border border-border">
           {sorted.map((ch) => (
-            <li
-              key={ch.id}
-              className="flex items-center gap-3 border-b border-border px-3 py-2.5 last:border-b-0"
-            >
+            <li key={ch.id} className="flex items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0">
               <ChannelIcon type={ch.type} className="text-muted-foreground" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
@@ -160,13 +173,26 @@ export function ChannelManager({ guildId }: { guildId: string }) {
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {channelKindLabel(ch.type)}
-                  {ch.parent_id
-                    ? ` · ${categories.find((c) => c.id === ch.parent_id)?.name ?? "category"}`
-                    : ""}
+                  {ch.parent_id ? ` · ${categories.find((c) => c.id === ch.parent_id)?.name ?? "category"}` : ""}
                   {ch.nsfw ? " · age-restricted" : ""}
                   {ch.rate_limit_per_user ? ` · slowmode ${ch.rate_limit_per_user}s` : ""}
                 </p>
               </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Copy channel ID"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(ch.id);
+                    toast.success("Channel ID copied");
+                  } catch {
+                    toast.error("Could not copy");
+                  }
+                }}
+              >
+                <Copy className="size-4" />
+              </Button>
               {isVoiceLike(ch.type) ? (
                 <Button
                   variant="outline"
@@ -184,15 +210,15 @@ export function ChannelManager({ guildId }: { guildId: string }) {
                   Join
                 </Button>
               ) : null}
+              {ch.type !== CHANNEL_TYPES.GUILD_CATEGORY ? (
+                <Button variant="ghost" size="sm" className="hidden text-xs sm:inline-flex" onClick={() => void cloneChannel(ch)}>
+                  Clone
+                </Button>
+              ) : null}
               <Button variant="ghost" size="icon-sm" onClick={() => startEdit(ch)} aria-label="Edit channel">
                 <Pencil className="size-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setPendingDelete(ch)}
-                aria-label="Delete channel"
-              >
+              <Button variant="ghost" size="icon-sm" onClick={() => setPendingDelete(ch)} aria-label="Delete channel">
                 <Trash2 className="size-4" />
               </Button>
             </li>
@@ -205,31 +231,22 @@ export function ChannelManager({ guildId }: { guildId: string }) {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit channel" : "New channel"}</DialogTitle>
             <DialogDescription>
-              {editing ? "Changes apply immediately on the live server." : "The bot needs Manage Channels to create this."}
+              {editing ? "Changes apply immediately." : "Bot needs Manage Channels."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="ch-name">Name</Label>
-              <Input
-                id="ch-name"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="general"
-              />
+              <Input id="ch-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="general" />
             </div>
             {!editing ? (
               <div className="grid gap-1.5">
                 <Label>Type</Label>
                 <Select value={String(draft.type)} onValueChange={(v) => setDraft({ ...draft, type: Number(v) })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CREATE_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -238,22 +255,13 @@ export function ChannelManager({ guildId }: { guildId: string }) {
             {draft.type !== CHANNEL_TYPES.GUILD_CATEGORY ? (
               <div className="grid gap-1.5">
                 <Label>Category</Label>
-                <Select
-                  value={draft.parent_id || "none"}
-                  onValueChange={(v) => setDraft({ ...draft, parent_id: v === "none" ? "" : v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
+                <Select value={draft.parent_id || "none"} onValueChange={(v) => setDraft({ ...draft, parent_id: v === "none" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No category</SelectItem>
-                    {categories
-                      .filter((c) => c.id !== editing?.id)
-                      .map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
+                    {categories.filter((c) => c.id !== editing?.id).map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -265,12 +273,7 @@ export function ChannelManager({ guildId }: { guildId: string }) {
               <>
                 <div className="grid gap-1.5">
                   <Label htmlFor="ch-topic">Topic</Label>
-                  <Textarea
-                    id="ch-topic"
-                    value={draft.topic}
-                    onChange={(e) => setDraft({ ...draft, topic: e.target.value })}
-                    className="min-h-16"
-                  />
+                  <Textarea id="ch-topic" value={draft.topic} onChange={(e) => setDraft({ ...draft, topic: e.target.value })} className="min-h-16" />
                 </div>
                 <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                   <Label htmlFor="ch-nsfw">Age-restricted</Label>
@@ -278,22 +281,20 @@ export function ChannelManager({ guildId }: { guildId: string }) {
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="ch-slow">Slowmode (seconds)</Label>
-                  <Input
-                    id="ch-slow"
-                    type="number"
-                    min={0}
-                    max={21600}
-                    value={draft.rate_limit_per_user}
-                    onChange={(e) => setDraft({ ...draft, rate_limit_per_user: Number(e.target.value) })}
-                  />
+                  <Input id="ch-slow" type="number" min={0} max={21600} value={draft.rate_limit_per_user} onChange={(e) => setDraft({ ...draft, rate_limit_per_user: Number(e.target.value) })} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[0, 5, 10, 30, 60, 300].map((s) => (
+                    <Button key={s} type="button" size="sm" variant="outline" onClick={() => setDraft({ ...draft, rate_limit_per_user: s })}>
+                      {s === 0 ? "Off" : `${s}s`}
+                    </Button>
+                  ))}
                 </div>
               </>
             ) : null}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={() => void save()}>{editing ? "Save" : "Create"}</Button>
           </DialogFooter>
         </DialogContent>
@@ -303,9 +304,7 @@ export function ChannelManager({ guildId }: { guildId: string }) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete #{pendingDelete?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This cannot be undone. Messages in this channel will be gone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -316,6 +315,7 @@ export function ChannelManager({ guildId }: { guildId: string }) {
                 try {
                   await deleteChannel(guildId, pendingDelete.id);
                   toast.success("Channel deleted");
+                  setPendingDelete(null);
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "Could not delete");
                 }
