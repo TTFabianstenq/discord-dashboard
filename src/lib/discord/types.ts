@@ -232,6 +232,7 @@ export type GuildTab =
   | "stickers"
   | "automod"
   | "events"
+  | "integrations"
   | "server";
 
 export type AppView =
