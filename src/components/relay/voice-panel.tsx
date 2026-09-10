@@ -32,6 +32,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
   const [busy, setBusy] = useState(false);
 
   const active = voiceChannels.find((c) => c.id === voiceChannelId);
+  const inThisGuild = Boolean(active);
   const selectValue = selected || voiceChannels[0]?.id || "";
 
   function sendVoiceState(channelId: string | null, mute: boolean, deaf: boolean) {
@@ -53,7 +54,6 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     setBusy(true);
     try {
       await joinVoice(guildId, id);
-      // Re-send with current mute/deaf flags (joinVoice sends unmuted by default)
       sendVoiceState(id, selfMute, selfDeaf);
       toast.success(
         mode === "demo"
@@ -84,7 +84,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
   function toggleMute() {
     const next = !selfMute;
     setSelfMute(next);
-    if (!voiceChannelId) {
+    if (!voiceChannelId || !inThisGuild) {
       toast.message(next ? "Will join muted" : "Will join unmuted");
       return;
     }
@@ -99,11 +99,10 @@ export function VoicePanel({ guildId }: { guildId: string }) {
 
   function toggleDeaf() {
     const next = !selfDeaf;
-    // Discord: deafen implies mute for the client flags
     const mute = next ? true : selfMute;
     setSelfDeaf(next);
     if (next) setSelfMute(true);
-    if (!voiceChannelId) {
+    if (!voiceChannelId || !inThisGuild) {
       toast.message(next ? "Will join deafened" : "Will join undeafened");
       return;
     }
@@ -117,42 +116,54 @@ export function VoicePanel({ guildId }: { guildId: string }) {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div
+      className={
+        inThisGuild
+          ? "rounded-xl border border-success/40 bg-success/10 p-4"
+          : "rounded-xl border border-border bg-card p-4"
+      }
+    >
       <div className="flex items-start gap-3">
-        <Volume2 className="mt-0.5 size-4 text-stone" />
+        <Volume2 className={`mt-0.5 size-4 ${inThisGuild ? "text-success" : "text-stone"}`} />
         <div className="min-w-0 flex-1">
-          <h3 className="font-medium">Voice</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-medium">Voice</h3>
+            {inThisGuild ? (
+              <span className="rounded-full bg-success/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success">
+                In VC
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Join / leave, mute, and deafen the <strong className="font-medium text-foreground">bot</strong> while
-            this tab stays open. Mute and deafen update Discord right away when the bot is in a channel.
+            Join / leave, mute, and deafen the bot while this tab stays open.
           </p>
         </div>
       </div>
 
       {mode === "live" && !gatewayConnected ? (
         <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-          Gateway not connected yet. Wait a moment or reconnect the bot — mute/deafen need the gateway.
+          Gateway not connected yet. Wait a moment or reconnect the bot.
         </p>
       ) : null}
 
-      {active ? (
-        <p className="mt-3 text-sm">
-          In channel: <span className="font-medium">{active.name}</span>
-          {selfMute ? " · muted" : ""}
-          {selfDeaf ? " · deafened" : ""}
-        </p>
+      {inThisGuild && active ? (
+        <div className="mt-3 rounded-lg border border-success/30 bg-background/50 px-3 py-2.5">
+          <p className="text-sm font-medium text-foreground">Connected to #{active.name}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {selfMute ? "Muted" : "Unmuted"}
+            {" · "}
+            {selfDeaf ? "Deafened" : "Undeafened"}
+            {" · keep this tab open"}
+          </p>
+        </div>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">Not in a voice channel</p>
+        <p className="mt-3 text-sm text-muted-foreground">Not in a voice channel in this server</p>
       )}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
         <div className="grid gap-1.5">
           <Label>Channel</Label>
-          <Select
-            value={selectValue}
-            onValueChange={setSelected}
-            disabled={voiceChannels.length === 0}
-          >
+          <Select value={selectValue} onValueChange={setSelected} disabled={voiceChannels.length === 0}>
             <SelectTrigger>
               <SelectValue placeholder="Select voice channel" />
             </SelectTrigger>
@@ -161,6 +172,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
                   {c.type === CHANNEL_TYPES.GUILD_STAGE_VOICE ? " (stage)" : ""}
+                  {c.id === voiceChannelId ? " · live" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -171,7 +183,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
             <Headphones className="size-4" />
             Join
           </Button>
-          <Button variant="outline" onClick={() => void onLeave()} disabled={busy || !voiceChannelId}>
+          <Button variant="outline" onClick={() => void onLeave()} disabled={busy || !inThisGuild}>
             <PhoneOff className="size-4" />
             Leave
           </Button>
@@ -179,28 +191,15 @@ export function VoicePanel({ guildId }: { guildId: string }) {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant={selfMute ? "secondary" : "outline"}
-          onClick={toggleMute}
-        >
+        <Button type="button" size="sm" variant={selfMute ? "secondary" : "outline"} onClick={toggleMute}>
           {selfMute ? <MicOff className="size-4" /> : <Mic className="size-4" />}
           {selfMute ? "Muted" : "Unmuted"}
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={selfDeaf ? "secondary" : "outline"}
-          onClick={toggleDeaf}
-        >
+        <Button type="button" size="sm" variant={selfDeaf ? "secondary" : "outline"} onClick={toggleDeaf}>
           {selfDeaf ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
           {selfDeaf ? "Deafened" : "Undeafened"}
         </Button>
       </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        These control the bot in Discord, not your own account. Join a channel first, then toggle.
-      </p>
     </div>
   );
 }

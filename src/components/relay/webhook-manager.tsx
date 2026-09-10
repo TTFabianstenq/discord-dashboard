@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { discordRequest } from "@/lib/discord/api";
 import { isTextLike } from "@/lib/discord/format";
 import { useRelay } from "@/lib/discord/store";
 import type { DiscordWebhook } from "@/lib/discord/types";
@@ -36,11 +38,18 @@ export function WebhookManager({ guildId }: { guildId: string }) {
   const createWebhook = useRelay((s) => s.createWebhook);
   const deleteWebhook = useRelay((s) => s.deleteWebhook);
   const mode = useRelay((s) => s.mode);
+  const token = useRelay((s) => s.token);
+
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("BotDeck hook");
   const [channelId, setChannelId] = useState("");
   const [pendingDelete, setPendingDelete] = useState<DiscordWebhook | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [sendTarget, setSendTarget] = useState<DiscordWebhook | null>(null);
+  const [sendContent, setSendContent] = useState("");
+  const [sendUsername, setSendUsername] = useState("");
+  const [sending, setSending] = useState(false);
 
   const textChannels = useMemo(() => channels.filter((c) => isTextLike(c.type)), [channels]);
 
@@ -76,14 +85,53 @@ export function WebhookManager({ guildId }: { guildId: string }) {
     }
   }
 
+  async function onSend() {
+    if (!sendTarget) return;
+    const bodyContent = sendContent.trim();
+    if (!bodyContent) {
+      toast.error("Write a message");
+      return;
+    }
+    if (mode === "demo") {
+      toast.message("Connect a live bot to send webhook messages");
+      return;
+    }
+    const whToken = sendTarget.token;
+    if (!whToken || !token) {
+      toast.error("This webhook has no token (app-owned webhooks often cannot be executed from here)");
+      return;
+    }
+    setSending(true);
+    try {
+      const body: { content: string; username?: string } = { content: bodyContent };
+      if (sendUsername.trim()) body.username = sendUsername.trim();
+      await discordRequest({
+        data: {
+          token,
+          method: "POST",
+          path: `/webhooks/${sendTarget.id}/${whToken}?wait=true`,
+          body,
+        },
+      });
+      toast.success("Sent via webhook");
+      setSendContent("");
+      setSendTarget(null);
+      setSendUsername("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send webhook message");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-6 sm:px-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-serif text-2xl tracking-tight">Webhooks</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create or delete channel webhooks. Needs Manage Webhooks.
-            {mode === "demo" ? " Sample mode simulates creates." : ""}
+            Create, delete, or <strong className="font-medium text-foreground">send a message</strong> through a
+            webhook. Needs Manage Webhooks.
           </p>
         </div>
         <Button onClick={() => setOpen(true)}>
@@ -101,15 +149,30 @@ export function WebhookManager({ guildId }: { guildId: string }) {
           {webhooks.map((w) => {
             const wh = w as DiscordWebhook;
             const ch = channels.find((c) => c.id === wh.channel_id);
+            const canSend = Boolean(wh.token);
             return (
-              <li key={wh.id} className="flex items-center gap-3 border-b border-border px-3 py-2.5 last:border-b-0">
+              <li key={wh.id} className="flex items-center gap-2 border-b border-border px-3 py-2.5 last:border-b-0">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{wh.name || "Webhook"}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     #{ch?.name ?? wh.channel_id}
                     {wh.application_id ? " · app-owned" : ""}
+                    {!canSend ? " · no token (can’t send)" : ""}
                   </p>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!canSend}
+                  onClick={() => {
+                    setSendTarget(wh);
+                    setSendContent("");
+                    setSendUsername(wh.name || "");
+                  }}
+                >
+                  <Send className="size-4" />
+                  Send
+                </Button>
                 {wh.url || wh.token ? (
                   <Button
                     variant="ghost"
@@ -181,6 +244,61 @@ export function WebhookManager({ guildId }: { guildId: string }) {
             </Button>
             <Button onClick={() => void onCreate()} disabled={busy}>
               {busy ? "Creating…" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!sendTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setSendTarget(null);
+            setSendContent("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send via webhook</DialogTitle>
+            <DialogDescription>
+              Posts as <strong>{sendTarget?.name || "Webhook"}</strong>
+              {sendTarget?.channel_id
+                ? ` in #${channels.find((c) => c.id === sendTarget.channel_id)?.name ?? "channel"}`
+                : ""}
+              . Not as the bot user.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="wh-send-name">Display name (optional)</Label>
+              <Input
+                id="wh-send-name"
+                value={sendUsername}
+                onChange={(e) => setSendUsername(e.target.value)}
+                placeholder={sendTarget?.name || "Webhook"}
+                maxLength={80}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="wh-send-body">Message</Label>
+              <Textarea
+                id="wh-send-body"
+                value={sendContent}
+                onChange={(e) => setSendContent(e.target.value)}
+                className="min-h-28"
+                placeholder="Message content…"
+                maxLength={2000}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void onSend()} disabled={sending || !sendContent.trim()}>
+              <Send className="size-4" />
+              {sending ? "Sending…" : "Send"}
             </Button>
           </DialogFooter>
         </DialogContent>

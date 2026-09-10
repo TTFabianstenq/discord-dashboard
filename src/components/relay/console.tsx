@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { Hash, LayoutGrid, LogOut, Menu, Settings2 } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Hash, Headphones, LayoutGrid, LogOut, Menu, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -44,14 +44,29 @@ export function Console() {
   const setView = useRelay((s) => s.setView);
   const bot = useRelay((s) => s.bot);
   const guilds = useRelay((s) => s.guilds);
+  const channels = useRelay((s) => s.channels);
   const mode = useRelay((s) => s.mode);
   const disconnect = useRelay((s) => s.disconnect);
   const rateLimit = useRelay((s) => s.rateLimit);
   const clearRateLimit = useRelay((s) => s.clearRateLimit);
+  const voiceChannelId = useRelay((s) => s.voiceChannelId);
+  const leaveVoice = useRelay((s) => s.leaveVoice);
   const [navOpen, setNavOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
 
   const guild = view.t === "guild" ? guilds.find((g) => g.id === view.id) : undefined;
+
+  const voiceInfo = useMemo(() => {
+    if (!voiceChannelId) return null;
+    for (const [gid, list] of Object.entries(channels)) {
+      const ch = list.find((c) => c.id === voiceChannelId);
+      if (ch) {
+        const g = guilds.find((x) => x.id === gid);
+        return { guildId: gid, guildName: g?.name ?? "Server", channelName: ch.name ?? "voice" };
+      }
+    }
+    return { guildId: "", guildName: "Server", channelName: "voice" };
+  }, [voiceChannelId, channels, guilds]);
 
   useEffect(() => {
     if (!rateLimit) return;
@@ -82,6 +97,46 @@ export function Console() {
         </div>
       ) : null}
 
+      {voiceInfo ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-success/30 bg-success/10 px-3 py-2 text-sm text-foreground sm:px-4">
+          <span className="flex min-w-0 items-center gap-2">
+            <Headphones className="size-4 shrink-0 text-success" />
+            <span className="truncate">
+              <strong className="font-medium">In VC</strong>
+              {" — "}
+              {voiceInfo.guildName} / #{voiceInfo.channelName}
+            </span>
+          </span>
+          <div className="flex shrink-0 gap-2">
+            {voiceInfo.guildId ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setView({ t: "guild", id: voiceInfo.guildId, tab: "server", channelId: voiceChannelId ?? undefined })
+                }
+              >
+                Manage
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  if (voiceInfo.guildId) await leaveVoice(voiceInfo.guildId);
+                  toast.message("Left voice");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Could not leave");
+                }
+              }}
+            >
+              Leave
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
         <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setNavOpen(true)} aria-label="Open menu">
           <Menu className="size-4" />
@@ -99,6 +154,12 @@ export function Console() {
             Live
           </span>
         )}
+        {voiceInfo ? (
+          <span className="hidden items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-success sm:inline-flex">
+            <Headphones className="size-3" />
+            In VC
+          </span>
+        ) : null}
         <div className="ml-auto flex items-center gap-2">
           {bot ? (
             <button
