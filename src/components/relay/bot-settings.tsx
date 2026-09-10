@@ -91,7 +91,7 @@ export function BotSettings() {
           /* some bots cannot patch applications/@me */
         }
       }
-      toast.success("Bot updated");
+      toast.success(mode === "demo" ? "Sample profile updated (local only)" : "Bot updated");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not update bot");
     } finally {
@@ -137,9 +137,17 @@ export function BotSettings() {
         </p>
         <h1 className="mt-1 font-serif text-3xl tracking-tight">Bot profile</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Username, avatar, and banner. Banner needs a bot that supports it (Discord may reject on some accounts).
+          {mode === "demo"
+            ? "This is a fake local bot for trying the UI. It does not exist on Discord and cannot join servers."
+            : "Username, avatar, and banner. Banner needs a bot that supports it (Discord may reject on some accounts)."}
         </p>
       </div>
+
+      {mode === "demo" ? (
+        <div className="rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground">
+          Sample mode only. Connect a real bot token from the login screen to manage an actual Discord bot.
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-4">
         <EntityAvatar name={username || bot.username} id={bot.id} src={avatar ?? userAvatarUrl(bot, 256)} size="xl" />
@@ -162,25 +170,29 @@ export function BotSettings() {
               }
             }}
           />
-          <Label htmlFor="bot-banner" className="cursor-pointer text-sm text-stone hover:underline">
-            Change banner
-          </Label>
-          <input
-            id="bot-banner"
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              try {
-                setBanner(await fileToDataUri(file));
-                toast.message("Banner selected — click Save profile");
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Could not read image");
-              }
-            }}
-          />
+          {mode === "live" ? (
+            <>
+              <Label htmlFor="bot-banner" className="cursor-pointer text-sm text-stone hover:underline">
+                Change banner
+              </Label>
+              <input
+                id="bot-banner"
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    setBanner(await fileToDataUri(file));
+                    toast.message("Banner selected — click Save profile");
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Could not read image");
+                  }
+                }}
+              />
+            </>
+          ) : null}
           <p className="font-mono text-xs text-muted-foreground">{bot.id}</p>
           {banner ? <p className="text-xs text-muted-foreground">New banner ready to save</p> : null}
         </div>
@@ -205,7 +217,7 @@ export function BotSettings() {
             ? gatewayConnected
               ? "Gateway connected — presence updates while this tab stays open."
               : "Connecting gateway…"
-            : "Sample mode only updates the dashboard preview."}
+            : "Sample mode only updates the dashboard preview — nothing is sent to Discord."}
         </p>
         <div className="mt-4 grid gap-3">
           <div className="grid gap-1.5">
@@ -262,8 +274,7 @@ export function BotSettings() {
                 placeholder="https://twitch.tv/channel or https://youtube.com/..."
               />
               <p className="text-[11px] text-muted-foreground">
-                Discord only accepts <strong>Twitch or YouTube</strong> URLs for Streaming. Other links are rejected.
-                The "Watch" button text is controlled by Discord — bots cannot rename it.
+                Discord only accepts <strong>Twitch or YouTube</strong> URLs for Streaming.
               </p>
             </div>
           ) : null}
@@ -273,52 +284,66 @@ export function BotSettings() {
         </div>
       </section>
 
-      <section className="border-t border-border pt-8">
-        <h2 className="font-serif text-2xl tracking-tight">Invite link</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Permissions below are encoded in the URL.</p>
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-          {PERMISSIONS.map((p) => {
-            const on = perms.includes(p.key);
-            return (
-              <li key={p.key}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPerms((cur) => (cur.includes(p.key) ? cur.filter((k) => k !== p.key) : [...cur, p.key]))
-                  }
-                  className={`flex h-full w-full flex-col rounded-lg border px-3 py-2.5 text-left text-sm ${
-                    on ? "border-stone/50 bg-stone/10" : "border-border hover:bg-secondary/60"
-                  }`}
-                >
-                  <span className="font-medium">{p.label}</span>
-                  <span className="mt-0.5 text-xs text-muted-foreground">{p.hint}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="mt-4 flex gap-2">
-          <Input readOnly value={url} className="font-mono text-xs" />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Copy invite link"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(url);
-                setCopied(true);
-                toast.success("Invite link copied");
-                setTimeout(() => setCopied(false), 1500);
-              } catch {
-                toast.error("Could not copy");
-              }
-            }}
-          >
-            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-          </Button>
-        </div>
-      </section>
+      {mode === "demo" ? (
+        <section className="border-t border-border pt-8">
+          <h2 className="font-serif text-2xl tracking-tight">Invite link</h2>
+          <p className="mt-2 rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+            The sample bot is <strong className="text-foreground">not a real Discord bot</strong>. There is no invite
+            link and it cannot be added to a server. Disconnect and connect with your own bot token to generate a real
+            invite URL.
+          </p>
+        </section>
+      ) : (
+        <section className="border-t border-border pt-8">
+          <h2 className="font-serif text-2xl tracking-tight">Invite link</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Share this to add <strong className="font-medium text-foreground">this live bot</strong> to a Discord
+            server. Permissions below are encoded in the URL.
+          </p>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {PERMISSIONS.map((p) => {
+              const on = perms.includes(p.key);
+              return (
+                <li key={p.key}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPerms((cur) => (cur.includes(p.key) ? cur.filter((k) => k !== p.key) : [...cur, p.key]))
+                    }
+                    className={`flex h-full w-full flex-col rounded-lg border px-3 py-2.5 text-left text-sm ${
+                      on ? "border-stone/50 bg-stone/10" : "border-border hover:bg-secondary/60"
+                    }`}
+                  >
+                    <span className="font-medium">{p.label}</span>
+                    <span className="mt-0.5 text-xs text-muted-foreground">{p.hint}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-4 flex gap-2">
+            <Input readOnly value={url} className="font-mono text-xs" />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Copy invite link"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setCopied(true);
+                  toast.success("Invite link copied");
+                  setTimeout(() => setCopied(false), 1500);
+                } catch {
+                  toast.error("Could not copy");
+                }
+              }}
+            >
+              {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+            </Button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
