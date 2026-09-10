@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Pin, RefreshCw, Reply, Send, Trash2, X } from "lucide-react";
+import { Eraser, MoreHorizontal, Pencil, Pin, RefreshCw, Reply, Send, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +12,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { discordRequest } from "@/lib/discord/api";
 import { userAvatarUrl } from "@/lib/discord/cdn";
 import { formatStamp, hexToInt, isTextLike } from "@/lib/discord/format";
@@ -23,16 +31,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const EMPTY_CHANNELS: never[] = [];
 const POLL_MS = 3500;
+const REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
 
 export function Chat({ guildId, channelId }: { guildId: string; channelId?: string }) {
   const channels = useRelay((s) => s.channels[guildId] ?? EMPTY_CHANNELS);
   const loadMessages = useRelay((s) => s.loadMessages);
   const setView = useRelay((s) => s.setView);
   const mode = useRelay((s) => s.mode);
+  const token = useRelay((s) => s.token);
+  const messages = useRelay((s) => (channelId ? s.messages[channelId] : undefined));
   const list = channels;
   const textChannels = useMemo(() => list.filter((c) => isTextLike(c.type)), [list]);
   const channel = channelId ? list.find((c) => c.id === channelId) : undefined;
   const [replyTo, setReplyTo] = useState<DiscordMessage | null>(null);
+  const [purgeOpen, setPurgeOpen] = useState(false);
+  const [purgeCount, setPurgeCount] = useState(10);
+  const [purging, setPurging] = useState(false);
 
   useEffect(() => {
     setReplyTo(null);
@@ -46,6 +60,38 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
     }, POLL_MS);
     return () => clearInterval(timer);
   }, [channelId, loadMessages]);
+
+  async function purge() {
+    if (!channelId) return;
+    if (mode === "demo") {
+      toast.message("Connect a live bot to purge");
+      return;
+    }
+    if (!token) return;
+    const ids = (messages ?? []).slice(-Math.min(100, Math.max(2, purgeCount))).map((m) => m.id);
+    if (ids.length < 2) {
+      toast.error("Need at least 2 messages under 14 days old");
+      return;
+    }
+    setPurging(true);
+    try {
+      await discordRequest({
+        data: {
+          token,
+          method: "POST",
+          path: `/channels/${channelId}/messages/bulk-delete`,
+          body: { messages: ids },
+        },
+      });
+      toast.success(`Purged ${ids.length} messages`);
+      setPurgeOpen(false);
+      void loadMessages(channelId, true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Purge failed (Manage Messages; messages < 14d)");
+    } finally {
+      setPurging(false);
+    }
+  }
 
   if (!channelId || !channel) {
     return (
@@ -76,6 +122,10 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
             </SelectContent>
           </Select>
         </div>
+        <Button variant="ghost" size="sm" className="shrink-0" onClick={() => setPurgeOpen(true)}>
+          <Eraser className="size-4" />
+          <span className="hidden sm:inline">Purge</span>
+        </Button>
         <Button variant="ghost" size="icon" className="shrink-0" aria-label="Refresh" onClick={() => void loadMessages(channel.id, true)}>
           <RefreshCw className="size-4" />
         </Button>
@@ -83,6 +133,34 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
       {mode === "live" ? <MessageContentIntentBanner channelId={channel.id} /> : null}
       <MessageList channelId={channel.id} onReply={setReplyTo} />
       <Composer channelId={channel.id} replyTo={replyTo} onClearReply={() => setReplyTo(null)} />
+
+      <Dialog open={purgeOpen} onOpenChange={setPurgeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Purge messages</DialogTitle>
+            <DialogDescription>
+              Bulk-delete the newest messages in this channel (2–100). Discord only allows messages younger than 14 days. Needs Manage Messages.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="purge-n">Count</Label>
+            <Input
+              id="purge-n"
+              type="number"
+              min={2}
+              max={100}
+              value={purgeCount}
+              onChange={(e) => setPurgeCount(Number(e.target.value) || 10)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPurgeOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void purge()} disabled={purging}>
+              {purging ? "Purging…" : "Purge"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -154,11 +232,10 @@ function MessageRow({ message, mine, onReply }: { message: DiscordMessage; mine:
   const hasBody = Boolean(content.trim()) || embeds.length > 0 || attachments.length > 0;
 
   async function togglePin() {
-    if (mode === "demo") {
+    if (mode === "demo" || !token) {
       toast.message("Pin needs a live bot");
       return;
     }
-    if (!token) return;
     try {
       if (message.pinned) {
         await discordRequest({ data: { token, method: "DELETE", path: `/channels/${message.channel_id}/pins/${message.id}` } });
@@ -170,6 +247,26 @@ function MessageRow({ message, mine, onReply }: { message: DiscordMessage; mine:
       void loadMessages(message.channel_id, true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not update pin");
+    }
+  }
+
+  async function react(emoji: string) {
+    if (mode === "demo" || !token) {
+      toast.message("Reactions need a live bot");
+      return;
+    }
+    try {
+      const encoded = encodeURIComponent(emoji);
+      await discordRequest({
+        data: {
+          token,
+          method: "PUT",
+          path: `/channels/${message.channel_id}/messages/${message.id}/reactions/${encoded}/@me`,
+        },
+      });
+      toast.success(`Reacted ${emoji}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not react");
     }
   }
 
@@ -237,6 +334,19 @@ function MessageRow({ message, mine, onReply }: { message: DiscordMessage; mine:
               </div>
             ))}
             {!hasBody ? <p className="mt-0.5 text-xs italic text-muted-foreground">(no text — enable Message Content Intent, or this message has no body)</p> : null}
+            <div className="mt-1.5 flex flex-wrap gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              {REACTIONS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  className="rounded-md border border-border bg-secondary/50 px-1.5 py-0.5 text-sm hover:bg-secondary"
+                  onClick={() => void react(e)}
+                  aria-label={`React ${e}`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
           </>
         )}
       </div>
