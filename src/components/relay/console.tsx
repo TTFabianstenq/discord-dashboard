@@ -15,6 +15,7 @@ import { ChannelManager } from "./channel-manager";
 import { ChannelTree } from "./channel-tree";
 import { Chat } from "./chat";
 import { CommandManager } from "./command-manager";
+import { EmojisPanel } from "./emojis-panel";
 import { EntityAvatar } from "./entity-avatar";
 import { InvitesPanel } from "./invites-panel";
 import { MembersPanel } from "./members-panel";
@@ -36,6 +37,7 @@ const TABS: { id: GuildTab; label: string }[] = [
   { id: "audit", label: "Audit" },
   { id: "webhooks", label: "Webhooks" },
   { id: "commands", label: "Commands" },
+  { id: "emojis", label: "Emojis" },
   { id: "server", label: "Server" },
 ];
 
@@ -235,6 +237,7 @@ export function Console() {
               {view.tab === "audit" ? <AuditPanel guildId={guild.id} /> : null}
               {view.tab === "webhooks" ? <WebhookManager guildId={guild.id} /> : null}
               {view.tab === "commands" ? <CommandManager guildId={guild.id} /> : null}
+              {view.tab === "emojis" ? <EmojisPanel guildId={guild.id} /> : null}
               {view.tab === "server" ? <ServerSettings guildId={guild.id} /> : null}
             </>
           ) : null}
