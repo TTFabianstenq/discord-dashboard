@@ -25,6 +25,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
   const leaveVoice = useRelay((s) => s.leaveVoice);
   const mode = useRelay((s) => s.mode);
   const gatewayConnected = useRelay((s) => s.gatewayConnected);
+  const gatewayDebug = useRelay((s) => s.gatewayDebug);
 
   const voiceChannels = useMemo(
     () =>
@@ -86,7 +87,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
       toast.error("Gateway not ready — disconnect and log in again");
       return;
     }
-    toast.message("Refreshing voice states…");
+    toast.message("Forcing new gateway identify…");
     gw.forceReconnect();
   }
 
@@ -110,26 +111,6 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     }
   }
 
-  async function moveUser(userId: string, channelId: string) {
-    if (mode === "demo" || !token) {
-      toast.message("Live bot required");
-      return;
-    }
-    try {
-      await discordRequest({
-        data: {
-          token,
-          method: "PATCH",
-          path: `/guilds/${guildId}/members/${userId}`,
-          body: { channel_id: channelId },
-        },
-      });
-      toast.success("Moved member");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Need Move Members permission");
-    }
-  }
-
   async function onJoin() {
     const id = selectValue;
     if (!id) {
@@ -143,7 +124,7 @@ export function VoicePanel({ guildId }: { guildId: string }) {
       toast.success(
         mode === "demo"
           ? "Joined voice (sample — not on Discord)"
-          : "Bot joined the voice channel. Keep this tab open.",
+          : "Join sent. Check Discord — roster only updates if gateway events arrive (see debug below).",
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not join voice");
@@ -204,6 +185,8 @@ export function VoicePanel({ guildId }: { guildId: string }) {
     ? voiceChannels.find((c) => c.id === rosterChannelId)?.name ?? "channel"
     : null;
 
+  const dbg = gatewayDebug;
+
   return (
     <div
       className={
@@ -222,35 +205,51 @@ export function VoicePanel({ guildId }: { guildId: string }) {
                 In VC
               </span>
             ) : null}
-            <span className="text-[10px] text-muted-foreground">
-              {voiceStates.length} tracked in server
-            </span>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Join / leave, see who is in each VC, move or disconnect people (Move Members). No audio from the site.
+            Join/leave the bot. Roster only works if Discord sends voice events to this browser gateway — see debug.
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={refreshRoster} disabled={mode !== "live"}>
           <RefreshCw className="size-4" />
-          Roster
+          Reconnect GW
         </Button>
       </div>
 
-      {mode === "live" && !gatewayConnected ? (
-        <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-          Gateway not connected — press Roster or disconnect and log in again.
+      <div className="mt-3 rounded-lg border border-border bg-background/60 px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+        <p className="font-sans text-[10px] font-semibold uppercase tracking-wide text-foreground">Gateway debug (real)</p>
+        {mode !== "live" ? (
+          <p className="mt-1">Sample mode — no gateway.</p>
+        ) : (
+          <ul className="mt-1 space-y-0.5">
+            <li>connected: {String(gatewayConnected || dbg?.connected || false)}</li>
+            <li>GUILD_CREATE events: {dbg?.guildCreateCount ?? 0}</li>
+            <li>VOICE_STATE_UPDATE events: {dbg?.voiceStateUpdateCount ?? 0}</li>
+            <li>last dispatch: {dbg?.lastDispatch || "—"}</li>
+            <li>states in this server: {voiceStates.length}</li>
+            {dbg?.closeCode != null ? (
+              <li>
+                last close: {dbg.closeCode} {dbg.closeReason}
+              </li>
+            ) : null}
+          </ul>
+        )}
+        <p className="mt-2 font-sans text-[11px] text-muted-foreground">
+          If <strong className="text-foreground">GUILD_CREATE is 0</strong> after connect, Discord never sent server
+          snapshots to this tab — roster cannot work. If GUILD_CREATE &gt; 0 but states stay 0, nobody was in VC when the
+          snapshot arrived and no VOICE_STATE_UPDATE followed.
         </p>
-      ) : null}
+      </div>
 
       {inThisGuild && active ? (
         <div className="mt-3 rounded-lg border border-success/30 bg-background/50 px-3 py-2.5">
-          <p className="text-sm font-medium text-foreground">Connected to #{active.name}</p>
+          <p className="text-sm font-medium text-foreground">Local join target: #{active.name}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {selfMute ? "Muted" : "Unmuted"} · {selfDeaf ? "Deafened" : "Undeafened"} · keep this tab open
+            {selfMute ? "Muted" : "Unmuted"} · {selfDeaf ? "Deafened" : "Undeafened"}
           </p>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">Not in a voice channel in this server</p>
+        <p className="mt-3 text-sm text-muted-foreground">Not marked as joined in this server</p>
       )}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
@@ -266,7 +265,6 @@ export function VoicePanel({ guildId }: { guildId: string }) {
                 return (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
-                    {c.type === CHANNEL_TYPES.GUILD_STAGE_VOICE ? " (stage)" : ""}
                     {count ? ` · ${count}` : ""}
                     {c.id === voiceChannelId ? " · live" : ""}
                   </SelectItem>
@@ -298,28 +296,6 @@ export function VoicePanel({ guildId }: { guildId: string }) {
         </Button>
       </div>
 
-      {voiceChannels.length > 0 ? (
-        <div className="mt-4 grid gap-1 border-t border-border/60 pt-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">All voice channels</p>
-          <ul className="mt-1 space-y-1">
-            {voiceChannels.map((c) => (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(c.id)}
-                  className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm ${
-                    c.id === rosterChannelId ? "bg-secondary" : "hover:bg-secondary/60"
-                  }`}
-                >
-                  <span className="truncate">#{c.name}</span>
-                  <span className="text-xs text-muted-foreground">{occupancy.get(c.id) ?? 0}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
       <div className="mt-4 border-t border-border/60 pt-3">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           In {rosterTitle ? `#${rosterTitle}` : "channel"}
@@ -327,14 +303,9 @@ export function VoicePanel({ guildId }: { guildId: string }) {
         </p>
         {mode === "demo" ? (
           <p className="mt-2 text-sm text-muted-foreground">Sample mode has no live voice roster.</p>
-        ) : !gatewayConnected ? (
-          <p className="mt-2 text-sm text-muted-foreground">Waiting for gateway… hit Roster.</p>
         ) : peopleInChannel.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">
-            Nobody in this channel
-            {voiceStates.length === 0
-              ? " — if people are in VC on Discord, hit Roster (or disconnect + log in again)."
-              : "."}
+            Empty. Do not trust a green “Live” badge alone — use the debug numbers above.
           </p>
         ) : (
           <ul className="mt-2 space-y-1.5">
@@ -357,32 +328,16 @@ export function VoicePanel({ guildId }: { guildId: string }) {
                     {name}
                     {isBot ? <span className="ml-1 text-[10px] uppercase text-stone">Bot</span> : null}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {v.self_mute || v.mute ? "muted" : ""}
-                    {(v.self_mute || v.mute) && (v.self_deaf || v.deaf) ? " · " : ""}
-                    {v.self_deaf || v.deaf ? "deaf" : ""}
-                  </span>
                   {!isBot ? (
-                    <div className="flex gap-1">
-                      <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => void disconnectUser(v.user_id)}>
-                        Kick VC
-                      </Button>
-                      {voiceChannels
-                        .filter((c) => c.id !== rosterChannelId)
-                        .slice(0, 2)
-                        .map((c) => (
-                          <Button
-                            key={c.id}
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs"
-                            onClick={() => void moveUser(v.user_id, c.id)}
-                          >
-                            → {c.name}
-                          </Button>
-                        ))}
-                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => void disconnectUser(v.user_id)}
+                    >
+                      Kick VC
+                    </Button>
                   ) : null}
                 </li>
               );
