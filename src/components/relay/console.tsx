@@ -31,22 +31,40 @@ import { WebhookManager } from "./webhook-manager";
 
 const EMPTY: never[] = [];
 
-const TABS: { id: GuildTab; label: string }[] = [
-  { id: "chat", label: "Chat" },
-  { id: "channels", label: "Channels" },
-  { id: "roles", label: "Roles" },
-  { id: "members", label: "Members" },
-  { id: "bans", label: "Bans" },
-  { id: "invites", label: "Invites" },
-  { id: "audit", label: "Audit" },
-  { id: "webhooks", label: "Webhooks" },
-  { id: "commands", label: "Commands" },
-  { id: "emojis", label: "Emojis" },
-  { id: "stickers", label: "Stickers" },
-  { id: "automod", label: "AutoMod" },
-  { id: "events", label: "Events" },
-  { id: "integrations", label: "Integrations" },
-  { id: "server", label: "Server" },
+const TAB_GROUPS: { label: string; tabs: { id: GuildTab; label: string }[] }[] = [
+  {
+    label: "Main",
+    tabs: [
+      { id: "chat", label: "Chat" },
+      { id: "channels", label: "Channels" },
+      { id: "members", label: "Members" },
+      { id: "roles", label: "Roles" },
+    ],
+  },
+  {
+    label: "Mod",
+    tabs: [
+      { id: "bans", label: "Bans" },
+      { id: "invites", label: "Invites" },
+      { id: "audit", label: "Audit" },
+    ],
+  },
+  {
+    label: "Tools",
+    tabs: [
+      { id: "webhooks", label: "Webhooks" },
+      { id: "commands", label: "Commands" },
+      { id: "emojis", label: "Emojis" },
+      { id: "stickers", label: "Stickers" },
+      { id: "events", label: "Events" },
+      { id: "automod", label: "AutoMod" },
+      { id: "integrations", label: "Integrations" },
+    ],
+  },
+  {
+    label: "Server",
+    tabs: [{ id: "server", label: "Settings" }],
+  },
 ];
 
 export function Console() {
@@ -61,6 +79,7 @@ export function Console() {
   const clearRateLimit = useRelay((s) => s.clearRateLimit);
   const voiceChannelId = useRelay((s) => s.voiceChannelId);
   const leaveVoice = useRelay((s) => s.leaveVoice);
+  const gatewayConnected = useRelay((s) => s.gatewayConnected);
   const [navOpen, setNavOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
 
@@ -101,7 +120,9 @@ export function Console() {
             Discord rate-limited this request. Retry in {rateLimitSeconds}s.
             {rateLimit?.message ? ` ${rateLimit.message}` : ""}
           </span>
-          <Button variant="ghost" size="sm" onClick={() => clearRateLimit()}>Dismiss</Button>
+          <Button variant="ghost" size="sm" onClick={() => clearRateLimit()}>
+            Dismiss
+          </Button>
         </div>
       ) : null}
 
@@ -115,34 +136,66 @@ export function Console() {
           </span>
           <div className="flex shrink-0 gap-2">
             {voiceInfo.guildId ? (
-              <Button variant="ghost" size="sm" onClick={() => setView({ t: "guild", id: voiceInfo.guildId, tab: "server", channelId: voiceChannelId ?? undefined })}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setView({
+                    t: "guild",
+                    id: voiceInfo.guildId,
+                    tab: "server",
+                    channelId: voiceChannelId ?? undefined,
+                  })
+                }
+              >
                 Manage
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" onClick={async () => {
-              try {
-                if (voiceInfo.guildId) await leaveVoice(voiceInfo.guildId);
-                toast.message("Left voice");
-              } catch (err) {
-                toast.error(err instanceof Error ? err.message : "Could not leave");
-              }
-            }}>Leave</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  if (voiceInfo.guildId) await leaveVoice(voiceInfo.guildId);
+                  toast.message("Left voice");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Could not leave");
+                }
+              }}
+            >
+              Leave
+            </Button>
           </div>
         </div>
       ) : null}
 
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
-        <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setNavOpen(true)} aria-label="Open menu">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="lg:hidden"
+          onClick={() => setNavOpen(true)}
+          aria-label="Open menu"
+        >
           <Menu className="size-4" />
         </Button>
-        <span className="inline-flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setView({ t: "overview" })}
+          className="inline-flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-secondary"
+        >
           <RelayMark className="size-5" />
           <span className="font-serif text-base">BotDeck</span>
-        </span>
+        </button>
         {mode === "demo" ? (
-          <span className="hidden rounded-full bg-stone/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone sm:inline">Sample</span>
+          <span className="hidden rounded-full bg-stone/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone sm:inline">
+            Sample
+          </span>
         ) : (
-          <span className="hidden rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-success sm:inline">Live</span>
+          <span className="hidden items-center gap-1.5 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-success sm:inline-flex">
+            <span className={cn("size-1.5 rounded-full bg-success", gatewayConnected ? "opacity-100" : "animate-pulse opacity-50")} />
+            {gatewayConnected ? "Live" : "Connecting"}
+          </span>
         )}
         {voiceInfo ? (
           <span className="hidden items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-success sm:inline-flex">
@@ -151,12 +204,23 @@ export function Console() {
         ) : null}
         <div className="ml-auto flex items-center gap-2">
           {bot ? (
-            <button type="button" onClick={() => setView({ t: "bot" })} className="hidden items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-sm hover:bg-secondary sm:flex">
+            <button
+              type="button"
+              onClick={() => setView({ t: "bot" })}
+              className="hidden items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-sm hover:bg-secondary sm:flex"
+            >
               <EntityAvatar name={bot.username} id={bot.id} src={userAvatarUrl(bot)} size="sm" />
               <span className="max-w-32 truncate">{bot.username}</span>
             </button>
           ) : null}
-          <Button variant="ghost" size="sm" onClick={() => { disconnect(); toast.message("Disconnected"); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              disconnect();
+              toast.message("Disconnected");
+            }}
+          >
             <LogOut className="size-4" />
             <span className="hidden sm:inline">Disconnect</span>
           </Button>
@@ -171,23 +235,60 @@ export function Console() {
           </aside>
         ) : null}
 
-        <main className={cn("flex min-w-0 flex-1 flex-col bg-background", view.t === "guild" && view.tab === "chat" ? "min-h-0 overflow-hidden" : "scroll-thin overflow-y-auto")}>
+        <main
+          className={cn(
+            "flex min-w-0 flex-1 flex-col bg-background",
+            view.t === "guild" && view.tab === "chat" ? "min-h-0 overflow-hidden" : "scroll-thin overflow-y-auto",
+          )}
+        >
           {view.t === "overview" ? <Overview /> : null}
           {view.t === "bot" ? <BotSettings /> : null}
           {view.t === "guild" && guild ? (
             <>
-              <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 md:px-3">
-                <span className="mr-2 hidden truncate text-sm font-medium md:inline">{guild.name}</span>
-                {TABS.map((tabItem) => (
-                  <button
-                    key={tabItem.id}
-                    type="button"
-                    onClick={() => setView({ t: "guild", id: guild.id, tab: tabItem.id, channelId: view.t === "guild" ? view.channelId : undefined })}
-                    className={cn("h-8 shrink-0 rounded-md px-3 text-sm", view.tab === tabItem.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}
-                  >
-                    {tabItem.label}
-                  </button>
-                ))}
+              <div className="shrink-0 border-b border-border bg-background/95 px-2 py-2 backdrop-blur md:px-4">
+                <div className="mb-1.5 flex items-center gap-2 px-1">
+                  <EntityAvatar
+                    name={guild.name}
+                    id={guild.id}
+                    src={guildIconUrl(guild)}
+                    size="sm"
+                    rounded="lg"
+                  />
+                  <span className="truncate text-sm font-medium">{guild.name}</span>
+                </div>
+                <div className="scroll-thin flex items-stretch gap-3 overflow-x-auto pb-0.5">
+                  {TAB_GROUPS.map((group) => (
+                    <div key={group.label} className="flex shrink-0 items-center gap-1">
+                      <span className="hidden px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground lg:inline">
+                        {group.label}
+                      </span>
+                      <div className="flex items-center gap-0.5 rounded-lg bg-secondary/40 p-0.5">
+                        {group.tabs.map((tabItem) => (
+                          <button
+                            key={tabItem.id}
+                            type="button"
+                            onClick={() =>
+                              setView({
+                                t: "guild",
+                                id: guild.id,
+                                tab: tabItem.id,
+                                channelId: view.t === "guild" ? view.channelId : undefined,
+                              })
+                            }
+                            className={cn(
+                              "h-7 shrink-0 rounded-md px-2.5 text-xs font-medium transition-colors sm:text-sm",
+                              view.tab === tabItem.id
+                                ? "bg-background text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            {tabItem.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
               {view.tab === "chat" ? <Chat guildId={guild.id} channelId={view.channelId} /> : null}
               {view.tab === "channels" ? <ChannelManager guildId={guild.id} /> : null}
@@ -210,7 +311,9 @@ export function Console() {
       </div>
 
       <Sheet open={navOpen} onOpenChange={setNavOpen}>
-        <SheetContent side="left" className="p-0">{nav}</SheetContent>
+        <SheetContent side="left" className="p-0">
+          {nav}
+        </SheetContent>
       </Sheet>
     </div>
   );
@@ -221,17 +324,72 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const setView = useRelay((s) => s.setView);
   const openGuild = useRelay((s) => s.openGuild);
   const guilds = useRelay((s) => s.guilds);
+  const bot = useRelay((s) => s.bot);
+  const mode = useRelay((s) => s.mode);
+
   return (
     <div className="flex h-full w-full flex-col">
       <div className="scroll-thin flex-1 overflow-y-auto p-3">
-        <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Console</p>
-        <NavItem icon={<LayoutGrid className="size-4" />} label="Overview" active={view.t === "overview"} onClick={() => { setView({ t: "overview" }); onNavigate(); }} />
-        <NavItem icon={<Settings2 className="size-4" />} label="Bot" active={view.t === "bot"} onClick={() => { setView({ t: "bot" }); onNavigate(); }} />
-        <p className="mb-2 mt-5 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Servers</p>
+        {bot ? (
+          <button
+            type="button"
+            onClick={() => {
+              setView({ t: "bot" });
+              onNavigate();
+            }}
+            className="mb-4 flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left hover:border-stone/40"
+          >
+            <EntityAvatar name={bot.username} id={bot.id} src={userAvatarUrl(bot)} size="md" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{bot.username}</span>
+              <span className="text-[11px] text-muted-foreground">
+                {mode === "demo" ? "Sample · settings" : "Bot settings"}
+              </span>
+            </span>
+          </button>
+        ) : null}
+
+        <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Console
+        </p>
+        <NavItem
+          icon={<LayoutGrid className="size-4" />}
+          label="Overview"
+          active={view.t === "overview"}
+          onClick={() => {
+            setView({ t: "overview" });
+            onNavigate();
+          }}
+        />
+        <NavItem
+          icon={<Settings2 className="size-4" />}
+          label="Bot"
+          active={view.t === "bot"}
+          onClick={() => {
+            setView({ t: "bot" });
+            onNavigate();
+          }}
+        />
+
+        <p className="mb-2 mt-5 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Servers · {guilds.length}
+        </p>
         <ul className="flex flex-col gap-0.5">
           {guilds.map((g) => (
             <li key={g.id}>
-              <button type="button" onClick={() => { openGuild(g.id); onNavigate(); }} className={cn("flex h-10 w-full items-center gap-2 rounded-md px-2 text-left text-sm", view.t === "guild" && view.id === g.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground")}>
+              <button
+                type="button"
+                onClick={() => {
+                  openGuild(g.id);
+                  onNavigate();
+                }}
+                className={cn(
+                  "flex h-10 w-full items-center gap-2 rounded-md px-2 text-left text-sm",
+                  view.t === "guild" && view.id === g.id
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
+                )}
+              >
                 <EntityAvatar name={g.name} id={g.id} src={guildIconUrl(g)} size="sm" rounded="lg" />
                 <span className="truncate">{g.name}</span>
               </button>
@@ -243,10 +401,28 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: ReactNode; label: string; active: boolean; onClick: () => void }) {
+function NavItem({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" onClick={onClick} className={cn("mb-0.5 flex h-10 w-full items-center gap-2 rounded-md px-2 text-sm", active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground")}>
-      {icon}{label}
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "mb-0.5 flex h-10 w-full items-center gap-2 rounded-md px-2 text-sm",
+        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
+      )}
+    >
+      {icon}
+      {label}
     </button>
   );
 }
@@ -262,9 +438,19 @@ function GuildRail({ guildId, channelId, tab }: { guildId: string; channelId?: s
         <span className="truncate text-sm font-medium">{guild?.name}</span>
       </div>
       <div className="scroll-thin flex-1 overflow-y-auto p-2">
-        <ChannelTree guildId={guildId} channels={channels} activeId={channelId} onSelect={(ch) => {
-          setView({ t: "guild", id: guildId, tab: isTextLike(ch.type) ? "chat" : tab === "chat" ? "channels" : tab, channelId: ch.id });
-        }} />
+        <ChannelTree
+          guildId={guildId}
+          channels={channels}
+          activeId={channelId}
+          onSelect={(ch) => {
+            setView({
+              t: "guild",
+              id: guildId,
+              tab: isTextLike(ch.type) ? "chat" : tab === "chat" ? "channels" : tab,
+              channelId: ch.id,
+            });
+          }}
+        />
       </div>
     </div>
   );
