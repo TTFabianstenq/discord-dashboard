@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { discordRequest } from "./api";
 import { isTextLike } from "./format";
 import { destroyGateway, ensureGateway, getGateway, type GatewayDebug } from "./gateway";
+import { buildAllowedMentions, normalizeMentionContent } from "./mentions";
 import { cloneDemo, type DemoSnapshot } from "./mock";
 import type {
   AppView,
@@ -413,10 +414,21 @@ export const useRelay = create<RelayState>((set, get) => ({
 
   sendMessage: async (channelId, content, embeds, opts) => {
     const { mode, token, bot } = get();
-    const body: { content?: string; embeds?: DiscordEmbed[]; message_reference?: { message_id: string; fail_if_not_exists?: boolean } } = {};
-    if (content.trim()) body.content = content;
+    const normalized = normalizeMentionContent(content);
+    const body: {
+      content?: string;
+      embeds?: DiscordEmbed[];
+      message_reference?: { message_id: string; fail_if_not_exists?: boolean };
+      allowed_mentions?: { parse: string[]; users: string[]; replied_user: boolean };
+    } = {};
+    if (normalized.trim()) {
+      body.content = normalized;
+      body.allowed_mentions = buildAllowedMentions(normalized);
+    }
     if (embeds && embeds.length) body.embeds = embeds;
-    if (opts?.messageReferenceId) body.message_reference = { message_id: opts.messageReferenceId, fail_if_not_exists: false };
+    if (opts?.messageReferenceId) {
+      body.message_reference = { message_id: opts.messageReferenceId, fail_if_not_exists: false };
+    }
     if (!body.content && !body.embeds?.length) throw new Error("Write a message or add an embed.");
     if (mode === "demo" && bot) {
       const created: DiscordMessage = {
@@ -448,24 +460,22 @@ export const useRelay = create<RelayState>((set, get) => ({
     if (data.mute !== undefined) body.mute = data.mute;
     if (data.deaf !== undefined) body.deaf = data.deaf;
     await live(token, "PATCH", `/guilds/${guildId}/members/${userId}`, body);
-    set((s) => ({
-      members: {
-        ...s.members,
-        [guildId]: (s.members[guildId] ?? []).map((m) =>
-          m.user?.id === userId
-            ? { ...m, nick: data.nick !== undefined ? data.nick : m.nick, roles: data.roles !== undefined ? data.roles : m.roles }
-            : m,
-        ),
-      },
-    }));
   },
 
   sendWebhookMessage: async (webhookId, webhookToken, content, embeds) => {
     const { mode, token } = get();
     if (mode === "demo") return;
     if (!token) throw new Error("Not connected.");
-    const body: { content?: string; embeds?: DiscordEmbed[] } = {};
-    if (content.trim()) body.content = content;
+    const normalized = normalizeMentionContent(content);
+    const body: {
+      content?: string;
+      embeds?: DiscordEmbed[];
+      allowed_mentions?: { parse: string[]; users: string[]; replied_user: boolean };
+    } = {};
+    if (normalized.trim()) {
+      body.content = normalized;
+      body.allowed_mentions = buildAllowedMentions(normalized);
+    }
     if (embeds?.length) body.embeds = embeds;
     await live(token, "POST", `/webhooks/${webhookId}/${webhookToken}`, body);
   },
@@ -474,7 +484,15 @@ export const useRelay = create<RelayState>((set, get) => ({
     const { mode, token } = get();
     if (mode === "demo") return;
     if (!token) throw new Error("Not connected.");
-    const body: { content?: string; embeds?: DiscordEmbed[] } = { content };
+    const normalized = normalizeMentionContent(content);
+    const body: {
+      content?: string;
+      embeds?: DiscordEmbed[];
+      allowed_mentions?: { parse: string[]; users: string[]; replied_user: boolean };
+    } = {
+      content: normalized,
+      allowed_mentions: buildAllowedMentions(normalized),
+    };
     if (embeds) body.embeds = embeds;
     const updated = await live<DiscordMessage>(token, "PATCH", `/channels/${channelId}/messages/${messageId}`, body);
     set((s) => ({
@@ -573,14 +591,6 @@ export const useRelay = create<RelayState>((set, get) => ({
     if (mode === "demo") return;
     if (!token) throw new Error("Not connected.");
     await live(token, "PATCH", `/guilds/${guildId}/members/${userId}`, { communication_disabled_until: until });
-    set((s) => ({
-      members: {
-        ...s.members,
-        [guildId]: (s.members[guildId] ?? []).map((m) =>
-          m.user?.id === userId ? { ...m, communication_disabled_until: until } : m,
-        ),
-      },
-    }));
   },
 
   loadWebhooks: async (guildId) => {
