@@ -186,7 +186,8 @@ export class DiscordGateway {
       return;
     }
     if (t === "VOICE_STATE_UPDATE") {
-      this.handlers.onVoiceStateUpdate?.(d as GatewayVoiceState);
+      const state = d as GatewayVoiceState;
+      this.handlers.onVoiceStateUpdate?.(state);
     }
   }
 
@@ -342,12 +343,8 @@ export function getGateway(): DiscordGateway | null {
   return singleton;
 }
 
-/** Always attach the latest handlers. Recreates the socket if token changed. */
+/** Always prefer a fresh socket with the latest handlers (voice roster needs GUILD_CREATE). */
 export function ensureGateway(token: string, handlers?: GatewayHandlers): DiscordGateway {
-  if (singleton && singleton.connected) {
-    if (handlers) singleton.setHandlers(handlers);
-    return singleton;
-  }
   singleton?.disconnect();
   singleton = new DiscordGateway(token, handlers ?? {});
   singleton.updatePresence({

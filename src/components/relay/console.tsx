@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Hash, Headphones, LayoutGrid, LogOut, Menu, Settings2 } from "lucide-react";
+import { ChevronDown, Hash, Headphones, LayoutGrid, LogOut, Menu, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { guildIconUrl, userAvatarUrl } from "@/lib/discord/cdn";
 import { isTextLike } from "@/lib/discord/format";
@@ -31,22 +39,21 @@ import { WebhookManager } from "./webhook-manager";
 
 const EMPTY: never[] = [];
 
-const TAB_GROUPS: { label: string; tabs: { id: GuildTab; label: string }[] }[] = [
+const PRIMARY_TABS: { id: GuildTab; label: string }[] = [
+  { id: "chat", label: "Chat" },
+  { id: "channels", label: "Channels" },
+  { id: "members", label: "Members" },
+  { id: "roles", label: "Roles" },
+  { id: "server", label: "Server" },
+];
+
+const MORE_SECTIONS: { label: string; tabs: { id: GuildTab; label: string }[] }[] = [
   {
-    label: "Main",
-    tabs: [
-      { id: "chat", label: "Chat" },
-      { id: "channels", label: "Channels" },
-      { id: "members", label: "Members" },
-      { id: "roles", label: "Roles" },
-    ],
-  },
-  {
-    label: "Mod",
+    label: "Moderation",
     tabs: [
       { id: "bans", label: "Bans" },
       { id: "invites", label: "Invites" },
-      { id: "audit", label: "Audit" },
+      { id: "audit", label: "Audit log" },
     ],
   },
   {
@@ -61,11 +68,15 @@ const TAB_GROUPS: { label: string; tabs: { id: GuildTab; label: string }[] }[] =
       { id: "integrations", label: "Integrations" },
     ],
   },
-  {
-    label: "Server",
-    tabs: [{ id: "server", label: "Settings" }],
-  },
 ];
+
+const MORE_TAB_IDS = new Set(MORE_SECTIONS.flatMap((s) => s.tabs.map((t) => t.id)));
+
+function tabLabel(id: GuildTab): string {
+  for (const t of PRIMARY_TABS) if (t.id === id) return t.label;
+  for (const s of MORE_SECTIONS) for (const t of s.tabs) if (t.id === id) return t.label;
+  return id;
+}
 
 export function Console() {
   const view = useRelay((s) => s.view);
@@ -111,6 +122,7 @@ export function Console() {
     rateLimit && rateLimit.until > now ? Math.ceil((rateLimit.until - now) / 1000) : 0;
 
   const nav = <Sidebar onNavigate={() => setNavOpen(false)} />;
+  const moreActive = view.t === "guild" && MORE_TAB_IDS.has(view.tab);
 
   return (
     <div className="flex h-dvh flex-col bg-background">
@@ -193,7 +205,12 @@ export function Console() {
           </span>
         ) : (
           <span className="hidden items-center gap-1.5 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-success sm:inline-flex">
-            <span className={cn("size-1.5 rounded-full bg-success", gatewayConnected ? "opacity-100" : "animate-pulse opacity-50")} />
+            <span
+              className={cn(
+                "size-1.5 rounded-full bg-success",
+                gatewayConnected ? "opacity-100" : "animate-pulse opacity-50",
+              )}
+            />
             {gatewayConnected ? "Live" : "Connecting"}
           </span>
         )}
@@ -245,49 +262,82 @@ export function Console() {
           {view.t === "bot" ? <BotSettings /> : null}
           {view.t === "guild" && guild ? (
             <>
-              <div className="shrink-0 border-b border-border bg-background/95 px-2 py-2 backdrop-blur md:px-4">
-                <div className="mb-1.5 flex items-center gap-2 px-1">
-                  <EntityAvatar
-                    name={guild.name}
-                    id={guild.id}
-                    src={guildIconUrl(guild)}
-                    size="sm"
-                    rounded="lg"
-                  />
-                  <span className="truncate text-sm font-medium">{guild.name}</span>
-                </div>
-                <div className="scroll-thin flex items-stretch gap-3 overflow-x-auto pb-0.5">
-                  {TAB_GROUPS.map((group) => (
-                    <div key={group.label} className="flex shrink-0 items-center gap-1">
-                      <span className="hidden px-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground lg:inline">
-                        {group.label}
-                      </span>
-                      <div className="flex items-center gap-0.5 rounded-lg bg-secondary/40 p-0.5">
-                        {group.tabs.map((tabItem) => (
-                          <button
-                            key={tabItem.id}
-                            type="button"
-                            onClick={() =>
-                              setView({
-                                t: "guild",
-                                id: guild.id,
-                                tab: tabItem.id,
-                                channelId: view.t === "guild" ? view.channelId : undefined,
-                              })
-                            }
-                            className={cn(
-                              "h-7 shrink-0 rounded-md px-2.5 text-xs font-medium transition-colors sm:text-sm",
-                              view.tab === tabItem.id
-                                ? "bg-background text-foreground shadow-sm"
-                                : "text-muted-foreground hover:text-foreground",
-                            )}
-                          >
-                            {tabItem.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+              <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2 sm:px-4">
+                <EntityAvatar
+                  name={guild.name}
+                  id={guild.id}
+                  src={guildIconUrl(guild)}
+                  size="sm"
+                  rounded="lg"
+                />
+                <span className="mr-1 hidden max-w-[10rem] truncate text-sm font-medium sm:inline md:max-w-[14rem]">
+                  {guild.name}
+                </span>
+                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+                  {PRIMARY_TABS.map((tabItem) => (
+                    <button
+                      key={tabItem.id}
+                      type="button"
+                      onClick={() =>
+                        setView({
+                          t: "guild",
+                          id: guild.id,
+                          tab: tabItem.id,
+                          channelId: view.channelId,
+                        })
+                      }
+                      className={cn(
+                        "h-8 shrink-0 rounded-md px-3 text-sm",
+                        view.tab === tabItem.id
+                          ? "bg-secondary font-medium text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {tabItem.label}
+                    </button>
                   ))}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          "inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-3 text-sm",
+                          moreActive
+                            ? "bg-secondary font-medium text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {moreActive ? tabLabel(view.tab) : "More"}
+                        <ChevronDown className="size-3.5 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      {MORE_SECTIONS.map((section, i) => (
+                        <div key={section.label}>
+                          {i > 0 ? <DropdownMenuSeparator /> : null}
+                          <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            {section.label}
+                          </DropdownMenuLabel>
+                          {section.tabs.map((tabItem) => (
+                            <DropdownMenuItem
+                              key={tabItem.id}
+                              onClick={() =>
+                                setView({
+                                  t: "guild",
+                                  id: guild.id,
+                                  tab: tabItem.id,
+                                  channelId: view.channelId,
+                                })
+                              }
+                              className={view.tab === tabItem.id ? "bg-secondary" : undefined}
+                            >
+                              {tabItem.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </div>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
               {view.tab === "chat" ? <Chat guildId={guild.id} channelId={view.channelId} /> : null}
@@ -349,9 +399,7 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
           </button>
         ) : null}
 
-        <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-          Console
-        </p>
+        <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">Console</p>
         <NavItem
           icon={<LayoutGrid className="size-4" />}
           label="Overview"
