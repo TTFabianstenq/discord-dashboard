@@ -23,6 +23,7 @@ import {
 import { discordRequest } from "@/lib/discord/api";
 import { userAvatarUrl } from "@/lib/discord/cdn";
 import { formatStamp, hexToInt, isTextLike } from "@/lib/discord/format";
+import { normalizeMentionContent } from "@/lib/discord/mentions";
 import { useRelay } from "@/lib/discord/store";
 import type { DiscordEmbed, DiscordMember, DiscordMessage } from "@/lib/discord/types";
 import { EntityAvatar } from "./entity-avatar";
@@ -154,10 +155,9 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
       <MessageList
         channelId={channel.id}
         onReply={setReplyTo}
-        onMention={(userId, username) => {
-          // composer listens via custom event to avoid prop drilling state up
+        onMention={(userId) => {
           window.dispatchEvent(
-            new CustomEvent("botdeck-mention", { detail: { userId, username, channelId: channel.id } }),
+            new CustomEvent("botdeck-mention", { detail: { userId, channelId: channel.id } }),
           );
         }}
       />
@@ -168,8 +168,7 @@ export function Chat({ guildId, channelId }: { guildId: string; channelId?: stri
           <DialogHeader>
             <DialogTitle>Purge messages</DialogTitle>
             <DialogDescription>
-              Bulk-delete the newest messages in this channel (2–100). Discord only allows messages younger than 14 days.
-              Needs Manage Messages.
+              Bulk-delete the newest messages (2–100). Messages must be under 14 days. Needs Manage Messages.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">
@@ -205,8 +204,7 @@ function MessageContentIntentBanner({ channelId }: { channelId: string }) {
   if (emptyBodies < Math.max(3, Math.floor(list.length * 0.6))) return null;
   return (
     <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 sm:px-4">
-      <strong>Message text is empty from Discord.</strong> Enable Message Content Intent in the Developer Portal, save,
-      refresh.
+      <strong>Message text is empty from Discord.</strong> Enable Message Content Intent in the Developer Portal.
     </div>
   );
 }
@@ -227,7 +225,7 @@ function MessageList({
 }: {
   channelId: string;
   onReply: (m: DiscordMessage) => void;
-  onMention: (userId: string, username: string) => void;
+  onMention: (userId: string) => void;
 }) {
   const messages = useRelay((s) => s.messages[channelId]);
   const botId = useRelay((s) => s.bot?.id);
@@ -257,7 +255,7 @@ function MessageList({
               onReply={() => onReply(m as DiscordMessage)}
               onMention={() => {
                 const a = (m as DiscordMessage).author;
-                if (a?.id) onMention(a.id, a.global_name || a.username || a.id);
+                if (a?.id) onMention(a.id);
               }}
             />
           ))}
@@ -348,7 +346,7 @@ function MessageRow({
             type="button"
             className="text-sm font-medium text-foreground hover:underline"
             onClick={onMention}
-            title="Mention this user"
+            title="Ping this user"
           >
             {message.author?.global_name || message.author?.username || "Unknown"}
           </button>
@@ -377,7 +375,7 @@ function MessageRow({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onMention}>
                   <AtSign className="size-4" />
-                  Mention
+                  Ping
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => void togglePin()}>
                   <Pin className="size-4" />
@@ -438,7 +436,9 @@ function MessageRow({
         ) : (
           <>
             {content.trim() ? (
-              <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">{content}</p>
+              <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+                {content}
+              </p>
             ) : null}
             {embeds.map((embed, i) => (
               <EmbedCard key={i} embed={embed} />
@@ -461,9 +461,7 @@ function MessageRow({
               </div>
             ))}
             {!hasBody ? (
-              <p className="mt-0.5 text-xs italic text-muted-foreground">
-                (no text — enable Message Content Intent, or this message has no body)
-              </p>
+              <p className="mt-0.5 text-xs italic text-muted-foreground">(no text — enable Message Content Intent)</p>
             ) : null}
             <div className="mt-1.5 flex flex-wrap gap-1 opacity-0 transition-opacity group-hover:opacity-100">
               {REACTIONS.map((e) => (
@@ -550,46 +548,47 @@ function Composer({
       .slice(0, 12);
   }, [members, mentionQuery]);
 
-  function insertMention(userId: string, label: string) {
+  const preview = useMemo(() => normalizeMentionContent(content), [content]);
+
+  function insertMention(userId: string) {
+    // Discord real ping token — must include angle brackets
     const tag = `<@${userId}>`;
-    const el = textareaRef.current;
-    if (el) {
-      const start = el.selectionStart ?? content.length;
-      const end = el.selectionEnd ?? content.length;
-      // if user typed @query, strip the incomplete @query before cursor
-      const before = content.slice(0, start);
+    setContent((prev) => {
+      const el = textareaRef.current;
+      if (!el) return prev ? `${prev} ${tag} ` : `${tag} `;
+      const start = el.selectionStart ?? prev.length;
+      const end = el.selectionEnd ?? prev.length;
+      const before = prev.slice(0, start);
       const at = before.lastIndexOf("@");
-      const useFrom = at >= 0 && !before.slice(at).includes(" ") ? at : start;
-      const next = content.slice(0, useFrom) + tag + " " + content.slice(end);
-      setContent(next);
+      const useFrom = at >= 0 && !/\s/.test(before.slice(at)) ? at : start;
+      const next = prev.slice(0, useFrom) + tag + " " + prev.slice(end);
       requestAnimationFrame(() => {
         const pos = useFrom + tag.length + 1;
         el.focus();
         el.setSelectionRange(pos, pos);
       });
-    } else {
-      setContent((c) => (c ? `${c} ${tag} ` : `${tag} `));
-    }
+      return next;
+    });
     setMentionOpen(false);
     setMentionQuery("");
-    toast.message(`Will ping ${label}`);
   }
 
   useEffect(() => {
     function onExternalMention(ev: Event) {
-      const detail = (ev as CustomEvent).detail as { userId?: string; username?: string; channelId?: string };
+      const detail = (ev as CustomEvent).detail as { userId?: string; channelId?: string };
       if (!detail?.userId || detail.channelId !== channelId) return;
-      insertMention(detail.userId, detail.username || detail.userId);
+      insertMention(detail.userId);
     }
     window.addEventListener("botdeck-mention", onExternalMention);
     return () => window.removeEventListener("botdeck-mention", onExternalMention);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelId, content]);
+  }, [channelId]);
 
   async function send() {
     setSending(true);
     try {
-      await sendMessage(channelId, content, embeds, { messageReferenceId: replyTo?.id });
+      // normalize again on send so <@id> is guaranteed
+      const payload = normalizeMentionContent(content);
+      await sendMessage(channelId, payload, embeds, { messageReferenceId: replyTo?.id });
       setContent("");
       setTitle("");
       setDescription("");
@@ -661,7 +660,7 @@ function Composer({
               setMentionQuery("");
             }
           }}
-          placeholder={replyTo ? "Write a reply… Type @ to ping" : "Message as the bot — type @ to ping someone"}
+          placeholder={replyTo ? "Write a reply…" : "Message as the bot — use Ping or type @"}
           className="min-h-[52px] resize-none border-0 bg-transparent focus-visible:ring-0"
           onKeyDown={(e) => {
             if (e.key === "Escape" && mentionOpen) {
@@ -674,6 +673,11 @@ function Composer({
             }
           }}
         />
+        {content.trim() && preview.includes("<@") ? (
+          <p className="mt-1 px-1 font-mono text-[10px] text-muted-foreground">
+            Send payload: {preview}
+          </p>
+        ) : null}
         {mentionOpen ? (
           <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg sm:left-3 sm:right-auto sm:w-72">
             <p className="border-b border-border px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -682,7 +686,7 @@ function Composer({
             {filteredMembers.length === 0 ? (
               <p className="px-3 py-3 text-xs text-muted-foreground">
                 {members.length === 0
-                  ? "No members loaded (enable Server Members Intent or open Members tab first)."
+                  ? "No members loaded — open Members tab first, or enable Server Members Intent."
                   : "No match."}
               </p>
             ) : (
@@ -697,19 +701,11 @@ function Composer({
                         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-secondary"
                         onMouseDown={(ev) => {
                           ev.preventDefault();
-                          insertMention(id, label);
+                          insertMention(id);
                         }}
                       >
-                        <EntityAvatar
-                          name={label}
-                          id={id}
-                          src={m.user ? userAvatarUrl(m.user) : null}
-                          size="sm"
-                        />
+                        <EntityAvatar name={label} id={id} src={m.user ? userAvatarUrl(m.user) : null} size="sm" />
                         <span className="truncate">{label}</span>
-                        {m.user?.bot ? (
-                          <span className="text-[10px] uppercase text-muted-foreground">bot</span>
-                        ) : null}
                       </button>
                     </li>
                   );
