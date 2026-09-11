@@ -1,15 +1,14 @@
-import type { DiscordChannel } from "./types";
 import { CHANNEL_TYPES } from "./types";
 
 export function isTextLike(type: number): boolean {
   return (
     type === CHANNEL_TYPES.GUILD_TEXT ||
     type === CHANNEL_TYPES.GUILD_ANNOUNCEMENT ||
-    type === CHANNEL_TYPES.PUBLIC_THREAD ||
-    type === CHANNEL_TYPES.PRIVATE_THREAD ||
-    type === CHANNEL_TYPES.ANNOUNCEMENT_THREAD ||
     type === CHANNEL_TYPES.GUILD_FORUM ||
-    type === CHANNEL_TYPES.GUILD_MEDIA
+    type === CHANNEL_TYPES.GUILD_MEDIA ||
+    type === 10 || // announcement thread
+    type === 11 || // public thread
+    type === 12 // private thread
   );
 }
 
@@ -42,7 +41,7 @@ export async function fileToDataUri(file: File): Promise<string> {
   });
 }
 
-/** Read file as base64 payload for Discord multipart upload (no data: prefix). */
+/** Read file as base64 for Discord multipart upload (no data: prefix). Max 8MB. */
 export async function fileToUpload(file: File): Promise<{
   filename: string;
   contentType: string;
@@ -59,8 +58,4 @@ export async function fileToUpload(file: File): Promise<{
     contentType: file.type || "application/octet-stream",
     dataBase64,
   };
-}
-
-export function channelSortKey(c: DiscordChannel): string {
-  return `${c.position ?? 0}`.padStart(6, "0") + (c.name ?? "");
 }
