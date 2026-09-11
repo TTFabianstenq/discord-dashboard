@@ -1,6 +1,6 @@
 /**
  * Discord Gateway client (browser).
- * Presence (op 3), voice state (op 4), voice roster via GUILDS + GUILD_VOICE_STATES.
+ * Tracks dispatches so the UI can show whether voice states actually arrive.
  */
 
 export type PresenceStatus = "online" | "idle" | "dnd" | "invisible";
@@ -38,16 +38,27 @@ export type GatewayVoiceState = {
   };
 };
 
+export type GatewayDebug = {
+  connected: boolean;
+  closeCode: number | null;
+  closeReason: string;
+  lastDispatch: string;
+  guildCreateCount: number;
+  voiceStateUpdateCount: number;
+  readyAt: number | null;
+};
+
 export type GatewayHandlers = {
   onReady?: () => void;
   onClose?: (code: number, reason: string) => void;
   onError?: (message: string) => void;
   onVoiceStateUpdate?: (state: GatewayVoiceState) => void;
   onGuildVoiceStates?: (guildId: string, states: GatewayVoiceState[]) => void;
+  onDebug?: (debug: GatewayDebug) => void;
 };
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
-/** GUILDS (1) + GUILD_VOICE_STATES (128) */
+/** GUILDS (1) + GUILD_VOICE_STATES (128) — voice_states on GUILD_CREATE + VOICE_STATE_UPDATE */
 const INTENTS = 1 | 128;
 
 const DEFAULT_PRESENCE: PresencePayload = {
@@ -72,6 +83,12 @@ export class DiscordGateway {
   };
   private intentionalClose = false;
   private reconnectAttempts = 0;
+  private guildCreateCount = 0;
+  private voiceStateUpdateCount = 0;
+  private lastDispatch = "";
+  private closeCode: number | null = null;
+  private closeReason = "";
+  private readyAt: number | null = null;
 
   constructor(token: string, handlers: GatewayHandlers = {}) {
     this.token = token;
@@ -86,11 +103,29 @@ export class DiscordGateway {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  getDebug(): GatewayDebug {
+    return {
+      connected: this.connected,
+      closeCode: this.closeCode,
+      closeReason: this.closeReason,
+      lastDispatch: this.lastDispatch,
+      guildCreateCount: this.guildCreateCount,
+      voiceStateUpdateCount: this.voiceStateUpdateCount,
+      readyAt: this.readyAt,
+    };
+  }
+
+  private emitDebug(): void {
+    this.handlers.onDebug?.(this.getDebug());
+  }
+
   connect(): void {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }
     this.intentionalClose = false;
+    this.closeCode = null;
+    this.closeReason = "";
     const ws = new WebSocket(GATEWAY_URL);
     this.ws = ws;
 
@@ -136,6 +171,9 @@ export class DiscordGateway {
       this.clearHeartbeat();
       this.clearPresenceRefresh();
       this.ws = null;
+      this.closeCode = ev.code;
+      this.closeReason = ev.reason || "";
+      this.emitDebug();
       if (!this.intentionalClose) {
         this.handlers.onClose?.(ev.code, ev.reason || "disconnected");
         this.scheduleReconnect(false);
@@ -143,7 +181,6 @@ export class DiscordGateway {
     };
   }
 
-  /** Full teardown + new identify so GUILD_CREATE (with voice_states) is received again */
   forceReconnect(): void {
     this.intentionalClose = true;
     this.clearHeartbeat();
@@ -163,31 +200,43 @@ export class DiscordGateway {
     this.sessionId = null;
     this.sequence = null;
     this.reconnectAttempts = 0;
+    this.guildCreateCount = 0;
+    this.voiceStateUpdateCount = 0;
+    this.lastDispatch = "";
+    this.readyAt = null;
     this.intentionalClose = false;
+    this.emitDebug();
     this.connect();
   }
 
   private handleDispatch(t: string | null, d: unknown): void {
+    if (t) this.lastDispatch = t;
+
     if (t === "READY") {
       const data = d as { session_id: string };
       this.sessionId = data.session_id;
       this.reconnectAttempts = 0;
+      this.readyAt = Date.now();
       this.pushPresence();
       this.startPresenceRefresh();
+      this.emitDebug();
       this.handlers.onReady?.();
       return;
     }
     if (t === "GUILD_CREATE") {
+      this.guildCreateCount += 1;
       const guild = d as { id: string; voice_states?: GatewayVoiceState[] };
       if (guild?.id) {
         const states = Array.isArray(guild.voice_states) ? guild.voice_states : [];
         this.handlers.onGuildVoiceStates?.(guild.id, states);
       }
+      this.emitDebug();
       return;
     }
     if (t === "VOICE_STATE_UPDATE") {
-      const state = d as GatewayVoiceState;
-      this.handlers.onVoiceStateUpdate?.(state);
+      this.voiceStateUpdateCount += 1;
+      this.handlers.onVoiceStateUpdate?.(d as GatewayVoiceState);
+      this.emitDebug();
     }
   }
 
@@ -268,6 +317,7 @@ export class DiscordGateway {
     this.send(2, {
       token: this.token,
       intents: INTENTS,
+      compress: false,
       properties: {
         os: "linux",
         browser: "botdeck",
@@ -343,7 +393,6 @@ export function getGateway(): DiscordGateway | null {
   return singleton;
 }
 
-/** Always prefer a fresh socket with the latest handlers (voice roster needs GUILD_CREATE). */
 export function ensureGateway(token: string, handlers?: GatewayHandlers): DiscordGateway {
   singleton?.disconnect();
   singleton = new DiscordGateway(token, handlers ?? {});
