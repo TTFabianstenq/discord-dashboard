@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Eye, EyeOff, KeyRound, Shield } from "lucide-react";
+import { Code2, Eye, EyeOff, KeyRound, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { useRelay } from "@/lib/discord/store";
 import { RelayMark } from "./mark";
 
 const ACK_KEY = "botdeck.intents_ack";
+const SOURCE_URL = "https://github.com/TTFabianstenq/discord-dashboard";
 
 export function LoginScreen() {
   const connectLive = useRelay((s) => s.connectLive);
@@ -52,11 +53,20 @@ export function LoginScreen() {
     return (
       <main className="relative min-h-dvh overflow-hidden bg-background">
         <div className="pointer-events-none absolute inset-0 bg-grid opacity-70" />
-        <header className="relative z-10 flex items-center px-5 py-5 sm:px-10">
+        <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-10">
           <span className="inline-flex items-center gap-2.5">
             <RelayMark className="size-7" />
             <span className="font-serif text-xl tracking-tight">BotDeck</span>
           </span>
+          <a
+            href={SOURCE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <Code2 className="size-3.5" />
+            Source code
+          </a>
         </header>
         <div className="relative z-10 mx-auto flex max-w-lg flex-col gap-6 px-5 pb-16 pt-6 sm:px-10">
           <div>
@@ -151,7 +161,18 @@ export function LoginScreen() {
           <RelayMark className="size-7" />
           <span className="font-serif text-xl tracking-tight">BotDeck</span>
         </span>
-        <p className="hidden text-xs text-muted-foreground sm:block">Anyone with a bot token can use this.</p>
+        <div className="flex items-center gap-3">
+          <p className="hidden text-xs text-muted-foreground sm:block">Anyone with a bot token can use this.</p>
+          <a
+            href={SOURCE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <Code2 className="size-3.5" />
+            Source code
+          </a>
+        </div>
       </header>
 
       <div className="relative z-10 mx-auto grid max-w-6xl gap-10 px-5 pb-20 pt-8 sm:px-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-20 lg:pt-12">
@@ -238,7 +259,7 @@ export function LoginScreen() {
               <Shield className="mt-0.5 size-3.5 shrink-0 text-stone" />
               <span>
                 The token stays in this browser tab and is sent only to Discord through BotDeck. Close the tab to
-                forget it.
+                forget it. Full source is public on GitHub.
               </span>
             </div>
           </form>
