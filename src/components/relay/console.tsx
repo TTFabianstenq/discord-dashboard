@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, Hash, Headphones, LayoutGrid, LogOut, Menu, Settings2 } from "lucide-react";
+import { ChevronDown, Code2, Hash, Headphones, LayoutGrid, LogOut, Menu, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -230,6 +230,16 @@ export function Console() {
               <span className="max-w-32 truncate">{bot.username}</span>
             </button>
           ) : null}
+          <a
+            href="https://github.com/TTFabianstenq/discord-dashboard"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+            title="Source code on GitHub"
+          >
+            <Code2 className="size-4" />
+            <span className="hidden sm:inline">Source</span>
+          </a>
           <Button
             variant="ghost"
             size="sm"
@@ -477,27 +487,20 @@ function NavItem({
 
 function GuildRail({ guildId, channelId, tab }: { guildId: string; channelId?: string; tab: GuildTab }) {
   const channels = useRelay((s) => s.channels[guildId] ?? EMPTY);
-  const guild = useRelay((s) => s.guilds.find((g) => g.id === guildId));
   const setView = useRelay((s) => s.setView);
+  const textChannels = channels.filter((c) => isTextLike(c.type));
+
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="flex h-11 items-center gap-2 border-b border-border px-3">
-        <Hash className="size-3.5 text-muted-foreground" />
-        <span className="truncate text-sm font-medium">{guild?.name}</span>
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+        <Hash className="size-4 text-muted-foreground" />
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Channels</span>
       </div>
       <div className="scroll-thin flex-1 overflow-y-auto p-2">
         <ChannelTree
-          guildId={guildId}
-          channels={channels}
-          activeId={channelId}
-          onSelect={(ch) => {
-            setView({
-              t: "guild",
-              id: guildId,
-              tab: isTextLike(ch.type) ? "chat" : tab === "chat" ? "channels" : tab,
-              channelId: ch.id,
-            });
-          }}
+          channels={textChannels}
+          selectedId={tab === "chat" ? channelId : undefined}
+          onSelect={(id) => setView({ t: "guild", id: guildId, tab: "chat", channelId: id })}
         />
       </div>
     </div>
