@@ -10,6 +10,17 @@ import { RelayMark } from "./mark";
 const ACK_KEY = "botdeck.intents_ack";
 const SOURCE_URL = "https://github.com/TTFabianstenq/discord-dashboard";
 
+function SourceCodeButton({ size = "lg" }: { size?: "sm" | "lg" }) {
+  return (
+    <Button asChild variant="outline" size={size}>
+      <a href={SOURCE_URL} target="_blank" rel="noreferrer">
+        <Code2 />
+        Source code
+      </a>
+    </Button>
+  );
+}
+
 export function LoginScreen() {
   const connectLive = useRelay((s) => s.connectLive);
   const connectDemo = useRelay((s) => s.connectDemo);
@@ -58,15 +69,7 @@ export function LoginScreen() {
             <RelayMark className="size-7" />
             <span className="font-serif text-xl tracking-tight">BotDeck</span>
           </span>
-          <a
-            href={SOURCE_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
-          >
-            <Code2 className="size-3.5" />
-            Source code
-          </a>
+          <SourceCodeButton size="sm" />
         </header>
         <div className="relative z-10 mx-auto flex max-w-lg flex-col gap-6 px-5 pb-16 pt-6 sm:px-10">
           <div>
@@ -163,15 +166,7 @@ export function LoginScreen() {
         </span>
         <div className="flex items-center gap-3">
           <p className="hidden text-xs text-muted-foreground sm:block">Anyone with a bot token can use this.</p>
-          <a
-            href={SOURCE_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
-          >
-            <Code2 className="size-3.5" />
-            Source code
-          </a>
+          <SourceCodeButton size="sm" />
         </div>
       </header>
 
@@ -254,6 +249,8 @@ export function LoginScreen() {
             >
               Try a sample bot
             </Button>
+
+            <SourceCodeButton />
 
             <div className="flex items-start gap-2 rounded-md bg-secondary/60 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <Shield className="mt-0.5 size-3.5 shrink-0 text-stone" />

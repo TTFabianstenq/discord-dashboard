@@ -1,3 +1,4 @@
+import { formatDistanceToNow } from "date-fns";
 import { CHANNEL_TYPES } from "./types";
 
 export function isTextLike(type: number): boolean {
@@ -10,6 +11,27 @@ export function isTextLike(type: number): boolean {
     type === 11 || // public thread
     type === 12 // private thread
   );
+}
+
+export function channelKindLabel(type: number): string {
+  switch (type) {
+    case CHANNEL_TYPES.GUILD_TEXT:
+      return "Text";
+    case CHANNEL_TYPES.GUILD_VOICE:
+      return "Voice";
+    case CHANNEL_TYPES.GUILD_CATEGORY:
+      return "Category";
+    case CHANNEL_TYPES.GUILD_ANNOUNCEMENT:
+      return "Announcement";
+    case CHANNEL_TYPES.GUILD_STAGE_VOICE:
+      return "Stage";
+    case CHANNEL_TYPES.GUILD_FORUM:
+      return "Forum";
+    case CHANNEL_TYPES.GUILD_MEDIA:
+      return "Media";
+    default:
+      return "Channel";
+  }
 }
 
 export function formatStamp(iso: string): string {
@@ -26,10 +48,21 @@ export function formatStamp(iso: string): string {
   }
 }
 
+export function formatRelative(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return formatDistanceToNow(d, { addSuffix: true });
+}
+
 export function hexToInt(hex: string): number {
   const h = hex.replace("#", "").trim();
   const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
   return Number.isFinite(n) ? n : 0;
+}
+
+export function intToHex(n: number): string {
+  const v = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  return `#${v.toString(16).padStart(6, "0")}`;
 }
 
 export async function fileToDataUri(file: File): Promise<string> {
