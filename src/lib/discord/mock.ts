@@ -1,5 +1,6 @@
 import type {
   DiscordApplication,
+  DiscordApplicationCommand,
   DiscordChannel,
   DiscordGuild,
   DiscordMember,
@@ -253,3 +254,22 @@ export function cloneDemo() {
 }
 
 export type DemoSnapshot = ReturnType<typeof cloneDemo>;
+
+/** Sample slash commands so the Commands tab has something to show in sample mode. */
+export function demoCommands(guildId?: string): DiscordApplicationCommand[] {
+  const base = (id: string, name: string, description: string, extra: Partial<DiscordApplicationCommand> = {}) =>
+    ({ id, application_id: demoApplication.id, guild_id: guildId, name, description, type: 1, ...extra }) as DiscordApplicationCommand;
+  if (!guildId) {
+    return [base("demo-g-help", "help", "List the bot's commands"), base("demo-g-ping", "ping", "Check that the bot is alive")];
+  }
+  return [
+    base(`demo-${guildId}-rules`, "rules", "Show the server rules"),
+    base(`demo-${guildId}-8ball`, "8ball", "Ask the magic 8-ball a question", {
+      options: [{ type: 3, name: "question", description: "Your yes/no question", required: true }],
+    }),
+    base(`demo-${guildId}-say`, "say", "Make the bot say something", {
+      options: [{ type: 3, name: "text", description: "What to say", required: true }],
+      default_member_permissions: "8192",
+    }),
+  ];
+}

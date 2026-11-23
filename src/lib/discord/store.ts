@@ -3,7 +3,8 @@ import { discordRequest } from "./api";
 import { isTextLike } from "./format";
 import { destroyGateway, ensureGateway, getGateway, type GatewayDebug } from "./gateway";
 import { buildAllowedMentions, normalizeMentionContent } from "./mentions";
-import { cloneDemo, type DemoSnapshot } from "./mock";
+import { cloneDemo, demoCommands, type DemoSnapshot } from "./mock";
+import { handleInteraction } from "./responder";
 import type {
   AppView,
   DiscordApplication,
@@ -236,6 +237,16 @@ export const useRelay = create<RelayState>((set, get) => ({
           onClose: () => useRelay.setState({ gatewayConnected: false }),
           onError: (message) => useRelay.setState({ error: message, gatewayConnected: false }),
           onDebug: (debug) => useRelay.setState({ gatewayDebug: debug }),
+          onInteraction: (interaction) => {
+            const st = useRelay.getState();
+            if (!st.token) return;
+            void handleInteraction(interaction, {
+              token: st.token,
+              appId: st.application?.id ?? st.bot?.id,
+              guilds: st.guilds,
+              commands: st.commands,
+            });
+          },
           onGuildVoiceStates: (guildId, states) => {
             const mapped: VoiceStateEntry[] = states.map((s) => ({
               user_id: s.user_id,
@@ -652,41 +663,70 @@ export const useRelay = create<RelayState>((set, get) => ({
 
   loadCommands: async (guildId) => {
     const { mode, token, application } = get();
-    if (mode === "demo" || !token || !application) return;
-    const appId = application.id;
-    try {
+    if (mode === "demo") {
+      const sample = demoCommands(guildId);
       if (guildId) {
-        const list = await live<DiscordApplicationCommand[]>(token, "GET", `/applications/${appId}/guilds/${guildId}/commands`);
-        set((s) => ({ commands: { ...s.commands, guild: { ...s.commands.guild, [guildId]: Array.isArray(list) ? list : [] } } }));
-      } else {
-        const list = await live<DiscordApplicationCommand[]>(token, "GET", `/applications/${appId}/commands`);
-        set((s) => ({ commands: { ...s.commands, global: Array.isArray(list) ? list : [] } }));
+        if (!get().commands.guild[guildId]) set((s) => ({ commands: { ...s.commands, guild: { ...s.commands.guild, [guildId]: sample } } }));
+      } else if (get().commands.global.length === 0) {
+        set((s) => ({ commands: { ...s.commands, global: sample } }));
       }
-    } catch {
-      if (guildId) set((s) => ({ commands: { ...s.commands, guild: { ...s.commands.guild, [guildId]: [] } } }));
-      else set((s) => ({ commands: { ...s.commands, global: [] } }));
+      return;
     }
+    if (!token) return;
+    if (!application) throw new Error("BotDeck couldn't read this bot's application profile, so it can't list commands.");
+    const appId = application.id;
+    const path = guildId
+      ? `/applications/${appId}/guilds/${guildId}/commands?with_localizations=false`
+      : `/applications/${appId}/commands?with_localizations=false`;
+    const list = await live<DiscordApplicationCommand[]>(token, "GET", path);
+    const safe = Array.isArray(list) ? list : [];
+    if (guildId) set((s) => ({ commands: { ...s.commands, guild: { ...s.commands.guild, [guildId]: safe } } }));
+    else set((s) => ({ commands: { ...s.commands, global: safe } }));
   },
 
   createCommand: async (data, guildId) => {
     const { mode, token, application } = get();
-    if (mode === "demo" || !token || !application) throw new Error("Not connected.");
-    const appId = application.id;
-    const path = guildId ? `/applications/${appId}/guilds/${guildId}/commands` : `/applications/${appId}/commands`;
-    const created = await live<DiscordApplicationCommand>(token, "POST", path, data);
-    if (guildId) {
-      set((s) => ({ commands: { ...s.commands, guild: { ...s.commands.guild, [guildId]: [...(s.commands.guild[guildId] ?? []), created] } } }));
+    let created: DiscordApplicationCommand;
+    if (mode === "demo") {
+      created = {
+        type: 1,
+        ...data,
+        id: `demo-cmd-${Date.now()}`,
+        application_id: application?.id ?? "demo",
+        guild_id: guildId,
+      } as DiscordApplicationCommand;
     } else {
-      set((s) => ({ commands: { ...s.commands, global: [...s.commands.global, created] } }));
+      if (!token || !application) throw new Error("Not connected.");
+      const appId = application.id;
+      const path = guildId ? `/applications/${appId}/guilds/${guildId}/commands` : `/applications/${appId}/commands`;
+      created = await live<DiscordApplicationCommand>(token, "POST", path, data);
+    }
+    // POST upserts by name — replace an existing entry instead of duplicating it.
+    const upsert = (list: DiscordApplicationCommand[]) =>
+      list.some((c) => c.id === created.id || (c.name === created.name && c.type === created.type))
+        ? list.map((c) => (c.id === created.id || (c.name === created.name && c.type === created.type) ? created : c))
+        : [...list, created];
+    if (guildId) {
+      set((s) => ({ commands: { ...s.commands, guild: { ...s.commands.guild, [guildId]: upsert(s.commands.guild[guildId] ?? []) } } }));
+    } else {
+      set((s) => ({ commands: { ...s.commands, global: upsert(s.commands.global) } }));
     }
   },
 
   editCommand: async (commandId, data, guildId) => {
-    const { mode, token, application } = get();
-    if (mode === "demo" || !token || !application) throw new Error("Not connected.");
-    const appId = application.id;
-    const path = guildId ? `/applications/${appId}/guilds/${guildId}/commands/${commandId}` : `/applications/${appId}/commands/${commandId}`;
-    const updated = await live<DiscordApplicationCommand>(token, "PATCH", path, data);
+    const { mode, token, application, commands } = get();
+    let updated: DiscordApplicationCommand;
+    if (mode === "demo") {
+      const list = guildId ? commands.guild[guildId] ?? [] : commands.global;
+      const prev = list.find((c) => c.id === commandId);
+      if (!prev) throw new Error("Command not found.");
+      updated = { ...prev, ...data } as DiscordApplicationCommand;
+    } else {
+      if (!token || !application) throw new Error("Not connected.");
+      const appId = application.id;
+      const path = guildId ? `/applications/${appId}/guilds/${guildId}/commands/${commandId}` : `/applications/${appId}/commands/${commandId}`;
+      updated = await live<DiscordApplicationCommand>(token, "PATCH", path, data);
+    }
     if (guildId) {
       set((s) => ({
         commands: {
@@ -701,10 +741,12 @@ export const useRelay = create<RelayState>((set, get) => ({
 
   deleteCommand: async (commandId, guildId) => {
     const { mode, token, application } = get();
-    if (mode === "demo" || !token || !application) throw new Error("Not connected.");
-    const appId = application.id;
-    const path = guildId ? `/applications/${appId}/guilds/${guildId}/commands/${commandId}` : `/applications/${appId}/commands/${commandId}`;
-    await live(token, "DELETE", path);
+    if (mode !== "demo") {
+      if (!token || !application) throw new Error("Not connected.");
+      const appId = application.id;
+      const path = guildId ? `/applications/${appId}/guilds/${guildId}/commands/${commandId}` : `/applications/${appId}/commands/${commandId}`;
+      await live(token, "DELETE", path);
+    }
     if (guildId) {
       set((s) => ({
         commands: {

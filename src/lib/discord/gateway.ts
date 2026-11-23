@@ -55,6 +55,8 @@ export type GatewayHandlers = {
   onVoiceStateUpdate?: (state: GatewayVoiceState) => void;
   onGuildVoiceStates?: (guildId: string, states: GatewayVoiceState[]) => void;
   onDebug?: (debug: GatewayDebug) => void;
+  /** Slash command / context menu / component interactions (INTERACTION_CREATE). */
+  onInteraction?: (interaction: unknown) => void;
 };
 
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -231,6 +233,11 @@ export class DiscordGateway {
         this.handlers.onGuildVoiceStates?.(guild.id, states);
       }
       this.emitDebug();
+      return;
+    }
+    if (t === "INTERACTION_CREATE") {
+      this.emitDebug();
+      this.handlers.onInteraction?.(d);
       return;
     }
     if (t === "VOICE_STATE_UPDATE") {
