@@ -354,7 +354,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
             return (
               <li
                 key={c.id}
-                className="group flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/30"
+                className="group flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/30"
               >
                 <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 font-mono text-lg text-primary">
                   {c.type === COMMAND_TYPES.CHAT_INPUT ? "/" : <MessageSquareReply className="size-5" />}
@@ -386,7 +386,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
                     {c.description || (c.type === COMMAND_TYPES.CHAT_INPUT ? "No description" : "Right-click menu command")}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="ml-auto flex w-full items-center justify-end gap-2 sm:w-auto">
                   {reply?.enabled ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs text-success">
                       <Zap className="size-3" />

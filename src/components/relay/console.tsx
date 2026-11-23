@@ -272,7 +272,7 @@ export function Console() {
           {view.t === "bot" ? <BotSettings /> : null}
           {view.t === "guild" && guild ? (
             <>
-              <div className="glass sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] px-2 sm:px-4">
+              <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-background/90 px-2 backdrop-blur-xl sm:px-4">
                 <EntityAvatar
                   name={guild.name}
                   id={guild.id}

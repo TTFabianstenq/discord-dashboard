@@ -19,7 +19,7 @@ export function Overview() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-6 sm:px-8 sm:py-10">
-      <div className="relative animate-fade-up overflow-hidden rounded-3xl border border-white/10 p-6 shadow-soft sm:p-8">
+      <div className="relative isolate animate-fade-up overflow-hidden rounded-3xl border border-white/10 p-6 shadow-soft sm:p-8">
         <div
           className="pointer-events-none absolute inset-0 -z-10"
           style={{
