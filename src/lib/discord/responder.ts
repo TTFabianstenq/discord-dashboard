@@ -58,7 +58,7 @@ export const DEFAULT_REPLY: CommandReply = {
   content: "Hey {user}! 👋",
   embed: false,
   embedTitle: "",
-  color: "#7c6cff",
+  color: "#c9bfb0",
   ephemeral: false,
 };
 
@@ -300,7 +300,7 @@ function avatarOf(user: IUser, size = 512): string {
 
 function hexToInt(hex: string): number {
   const n = parseInt(hex.replace("#", ""), 16);
-  return Number.isFinite(n) ? n : 0x7c6cff;
+  return Number.isFinite(n) ? n : 0xc9bfb0;
 }
 
 function flattenOptions(options: IOption[] | undefined, out: Record<string, IOption> = {}): Record<string, IOption> {

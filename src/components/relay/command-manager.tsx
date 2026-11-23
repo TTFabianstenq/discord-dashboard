@@ -196,8 +196,8 @@ export function CommandManager({ guildId }: { guildId: string }) {
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Tools</p>
-          <h2 className="mt-1 font-serif text-3xl font-semibold tracking-tight">Slash commands</h2>
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-stone">Tools</p>
+          <h2 className="mt-1 font-serif text-2xl tracking-tight">Slash commands</h2>
           <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
             Create commands, then pick what the bot replies with. No code needed.
           </p>
@@ -220,7 +220,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
           "relative overflow-hidden rounded-2xl border p-4 sm:p-5",
           responderState.tone === "on" && "border-success/30 bg-success/[0.07]",
           responderState.tone === "warn" && "border-amber-400/30 bg-amber-400/[0.07]",
-          responderState.tone === "demo" && "border-primary/30 bg-primary/[0.07]",
+          responderState.tone === "demo" && "border-stone/30 bg-stone/[0.06]",
         )}
       >
         <div className="flex flex-wrap items-start gap-3">
@@ -229,7 +229,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
               "grid size-10 shrink-0 place-items-center rounded-xl",
               responderState.tone === "on" && "bg-success/15 text-success",
               responderState.tone === "warn" && "bg-amber-400/15 text-amber-300",
-              responderState.tone === "demo" && "bg-primary/15 text-primary",
+              responderState.tone === "demo" && "bg-stone/15 text-stone",
             )}
           >
             {responderState.tone === "on" ? <Zap className="size-5" /> : <Bot className="size-5" />}
@@ -338,7 +338,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-12 text-center">
-          <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary">
+          <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-stone/10 text-stone">
             <Sparkles className="size-5" />
           </div>
           <p className="font-medium">{query ? "No commands match that search" : `No ${scope === "guild" ? "server" : "global"} commands yet`}</p>
@@ -354,9 +354,9 @@ export function CommandManager({ guildId }: { guildId: string }) {
             return (
               <li
                 key={c.id}
-                className="group flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/30"
+                className="group flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-stone/40"
               >
-                <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 font-mono text-lg text-primary">
+                <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-stone/10 font-mono text-lg text-stone">
                   {c.type === COMMAND_TYPES.CHAT_INPUT ? "/" : <MessageSquareReply className="size-5" />}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -425,7 +425,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
       {/* Presets */}
       <section>
         <div className="mb-3 flex items-baseline justify-between gap-2">
-          <h3 className="font-serif text-lg font-semibold">Quick add</h3>
+          <h3 className="font-serif text-lg">Quick add</h3>
           <p className="text-xs text-muted-foreground">
             One click registers it {scope === "guild" ? "in this server" : "globally"} and sets up the reply.
           </p>
@@ -439,7 +439,7 @@ export function CommandManager({ guildId }: { guildId: string }) {
                 type="button"
                 disabled={exists || addingPreset !== null}
                 onClick={() => void addPreset(p)}
-                className="group flex items-start gap-3 rounded-xl border border-border bg-card p-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_8px_30px_-12px] hover:shadow-primary/40 disabled:pointer-events-none disabled:opacity-45"
+                className="group flex items-start gap-3 rounded-xl border border-border bg-card p-3 text-left transition-all hover:border-stone/40 disabled:pointer-events-none disabled:opacity-45"
               >
                 <span className="text-xl leading-none">{p.emoji}</span>
                 <span className="min-w-0">
@@ -704,7 +704,7 @@ function CommandEditor({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle className="font-serif text-xl">{isEdit ? `Edit ${commandLabel(command!)}` : "New command"}</DialogTitle>
+          <DialogTitle className="font-serif text-xl font-normal">{isEdit ? `Edit ${commandLabel(command!)}` : "New command"}</DialogTitle>
           <DialogDescription>
             {scope === "global"
               ? "Global commands work in every server the bot is in and can take a while to appear."
@@ -874,11 +874,11 @@ function CommandEditor({
           </div>
 
           {/* Reply */}
-          <div className="grid content-start gap-4 rounded-2xl border border-primary/25 bg-primary/[0.05] p-4">
+          <div className="grid content-start gap-4 rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="flex items-center gap-1.5 text-sm font-medium">
-                  <Zap className="size-4 text-primary" /> Auto-reply
+                  <Zap className="size-4 text-stone" /> Auto-reply
                 </p>
                 <p className="text-xs text-muted-foreground">BotDeck answers this command for you.</p>
               </div>
@@ -925,7 +925,7 @@ function CommandEditor({
                           type="button"
                           title={v.meaning}
                           onClick={() => setReplyDraft((r) => ({ ...r, content: `${r.content}${v.token}` }))}
-                          className="rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          className="rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:border-stone/40 hover:text-foreground"
                         >
                           {v.token}
                         </button>

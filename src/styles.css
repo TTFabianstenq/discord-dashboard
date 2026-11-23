@@ -2,33 +2,31 @@
 @import "tw-animate-css";
 
 @theme {
-  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
-  /* "serif" is the display face used for headings across the app. */
-  --font-serif: "Bricolage Grotesque", "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --color-background: #07080d;
-  --color-foreground: #eef0f7;
-  --color-card: #0e1018;
-  --color-card-foreground: #eef0f7;
-  --color-popover: #12141e;
-  --color-popover-foreground: #eef0f7;
-  --color-primary: #7c6cff;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #171a26;
-  --color-secondary-foreground: #eef0f7;
-  --color-muted: #171a26;
-  --color-muted-foreground: #8d93a8;
-  --color-accent: #1b1e2c;
-  --color-accent-foreground: #eef0f7;
-  --color-destructive: #f0526b;
-  --color-destructive-foreground: #ffffff;
-  --color-border: #1f2333;
-  --color-input: #252a3c;
-  --color-ring: #8f82ff;
-  /* Secondary accent (legacy name kept so every panel picks it up). */
-  --color-stone: #a99dff;
-  --color-success: #34d399;
+  --color-background: #0a0b0d;
+  --color-foreground: #f2f1ed;
+  --color-card: #121317;
+  --color-card-foreground: #f2f1ed;
+  --color-popover: #16171c;
+  --color-popover-foreground: #f2f1ed;
+  --color-primary: #e8e2d6;
+  --color-primary-foreground: #12110e;
+  --color-secondary: #1c1d22;
+  --color-secondary-foreground: #f2f1ed;
+  --color-muted: #1c1d22;
+  --color-muted-foreground: #8a8c91;
+  --color-accent: #1c1d22;
+  --color-accent-foreground: #f2f1ed;
+  --color-destructive: #c45c4a;
+  --color-destructive-foreground: #f2f1ed;
+  --color-border: #26272c;
+  --color-input: #26272c;
+  --color-ring: #c9bfb0;
+  --color-stone: #c9bfb0;
+  --color-success: #6f8f72;
 
   --radius: 0.75rem;
   --radius-xs: 0.25rem;
@@ -37,21 +35,7 @@
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
 
-  --shadow-soft: 0 24px 60px -24px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.03);
-  --shadow-glow: 0 10px 40px -10px color-mix(in oklab, #7c6cff 55%, transparent);
-
-  --animate-fade-up: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-
-  @keyframes fade-up {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  --shadow-soft: 0 12px 40px -18px rgb(0 0 0 / 0.55);
 }
 
 @layer base {
@@ -66,20 +50,6 @@
 
   body {
     @apply bg-background text-foreground font-sans;
-    background-image:
-      radial-gradient(60rem 40rem at 110% -10%, color-mix(in oklab, #7c6cff 9%, transparent), transparent 60%),
-      radial-gradient(50rem 36rem at -10% 110%, color-mix(in oklab, #22d3ee 5%, transparent), transparent 60%);
-    background-attachment: fixed;
-  }
-
-  ::selection {
-    background: color-mix(in oklab, #7c6cff 45%, transparent);
-  }
-
-  input,
-  textarea,
-  select {
-    color-scheme: dark;
   }
 
   button:not(:disabled),
@@ -91,37 +61,10 @@
   h2,
   h3 {
     text-wrap: balance;
-    font-weight: 700;
-    letter-spacing: -0.02em;
   }
 
   p {
     text-wrap: pretty;
-  }
-}
-
-@utility glass {
-  background: color-mix(in oklab, var(--color-card) 72%, transparent);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-}
-
-@utility text-gradient {
-  background: linear-gradient(100deg, #ffffff 0%, #c9c2ff 45%, #7c6cff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-@utility card-hover {
-  transition:
-    border-color 0.2s,
-    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.2s;
-  &:hover {
-    border-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-glow);
   }
 }
 

@@ -181,7 +181,7 @@ export function Console() {
         </div>
       ) : null}
 
-      <header className="glass relative z-20 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] px-3 sm:px-4">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:px-4">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -196,8 +196,8 @@ export function Console() {
           onClick={() => setView({ t: "overview" })}
           className="inline-flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-secondary"
         >
-          <RelayMark className="size-6" />
-          <span className="font-serif text-base font-bold tracking-tight">BotDeck</span>
+          <RelayMark className="size-5" />
+          <span className="font-serif text-base">BotDeck</span>
         </button>
         {mode === "demo" ? (
           <span className="hidden rounded-full bg-stone/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone sm:inline">
@@ -224,7 +224,7 @@ export function Console() {
             <button
               type="button"
               onClick={() => setView({ t: "bot" })}
-              className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] py-1 pl-1 pr-3 text-sm transition-colors hover:border-primary/40 sm:flex"
+              className="hidden items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 text-sm hover:bg-secondary sm:flex"
             >
               <EntityAvatar name={bot.username} id={bot.id} src={userAvatarUrl(bot)} size="sm" />
               <span className="max-w-32 truncate">{bot.username}</span>
@@ -255,16 +255,16 @@ export function Console() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-64 shrink-0 overflow-hidden border-r border-white/[0.06] bg-card/40 lg:flex">{nav}</aside>
+        <aside className="hidden w-60 shrink-0 overflow-hidden border-r border-border bg-background lg:flex">{nav}</aside>
         {view.t === "guild" && view.tab === "chat" ? (
-          <aside className="hidden w-56 shrink-0 overflow-hidden border-r border-white/[0.06] bg-card/30 md:flex">
+          <aside className="hidden w-56 shrink-0 overflow-hidden border-r border-border bg-background md:flex">
             <GuildRail guildId={view.id} channelId={view.channelId} tab={view.tab} />
           </aside>
         ) : null}
 
         <main
           className={cn(
-            "flex min-w-0 flex-1 flex-col",
+            "flex min-w-0 flex-1 flex-col bg-background",
             view.t === "guild" && view.tab === "chat" ? "min-h-0 overflow-hidden" : "scroll-thin overflow-y-auto",
           )}
         >
@@ -272,7 +272,7 @@ export function Console() {
           {view.t === "bot" ? <BotSettings /> : null}
           {view.t === "guild" && guild ? (
             <>
-              <div className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-background/90 px-2 backdrop-blur-xl sm:px-4">
+              <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2 sm:px-4">
                 <EntityAvatar
                   name={guild.name}
                   id={guild.id}
@@ -283,7 +283,7 @@ export function Console() {
                 <span className="mr-1 hidden max-w-[10rem] truncate text-sm font-medium sm:inline md:max-w-[14rem]">
                   {guild.name}
                 </span>
-                <div className="scroll-thin flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+                <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
                   {PRIMARY_TABS.map((tabItem) => (
                     <button
                       key={tabItem.id}
@@ -297,10 +297,10 @@ export function Console() {
                         })
                       }
                       className={cn(
-                        "h-9 shrink-0 rounded-lg px-3 text-sm transition-colors",
+                        "h-8 shrink-0 rounded-md px-3 text-sm",
                         view.tab === tabItem.id
-                          ? "bg-primary/15 font-medium text-foreground ring-1 ring-inset ring-primary/40"
-                          : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                          ? "bg-secondary font-medium text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
                       )}
                     >
                       {tabItem.label}
@@ -311,10 +311,10 @@ export function Console() {
                       <button
                         type="button"
                         className={cn(
-                          "inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-3 text-sm transition-colors",
+                          "inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-3 text-sm",
                           moreActive
-                            ? "bg-primary/15 font-medium text-foreground ring-1 ring-inset ring-primary/40"
-                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                            ? "bg-secondary font-medium text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
                         )}
                       >
                         {moreActive ? tabLabel(view.tab) : "More"}
@@ -397,7 +397,7 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
               setView({ t: "bot" });
               onNavigate();
             }}
-            className="mb-5 flex w-full items-center gap-3 rounded-2xl border border-white/[0.08] bg-gradient-to-br from-primary/15 to-transparent p-3 text-left transition-colors hover:border-primary/40"
+            className="mb-4 flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left hover:border-stone/40"
           >
             <EntityAvatar name={bot.username} id={bot.id} src={userAvatarUrl(bot)} size="md" />
             <span className="min-w-0 flex-1">
@@ -442,10 +442,10 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
                   onNavigate();
                 }}
                 className={cn(
-                  "relative flex h-10 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm transition-colors",
+                  "flex h-10 w-full items-center gap-2 rounded-md px-2 text-left text-sm",
                   view.t === "guild" && view.id === g.id
-                    ? "bg-primary/12 text-foreground before:absolute before:-left-3 before:top-2 before:h-6 before:w-1 before:rounded-r-full before:bg-primary"
-                    : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
                 )}
               >
                 <EntityAvatar name={g.name} id={g.id} src={guildIconUrl(g)} size="sm" rounded="lg" />
@@ -475,10 +475,8 @@ function NavItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "relative mb-0.5 flex h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors",
-        active
-          ? "bg-primary/12 text-foreground before:absolute before:-left-3 before:top-2 before:h-6 before:w-1 before:rounded-r-full before:bg-primary [&_svg]:text-stone"
-          : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+        "mb-0.5 flex h-10 w-full items-center gap-2 rounded-md px-2 text-sm",
+        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
       )}
     >
       {icon}
@@ -495,7 +493,7 @@ function GuildRail({ guildId, channelId, tab }: { guildId: string; channelId?: s
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] px-3">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         <Hash className="size-4 text-muted-foreground" />
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Channels</span>
       </div>
