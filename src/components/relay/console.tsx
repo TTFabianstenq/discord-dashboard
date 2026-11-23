@@ -14,7 +14,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { guildIconUrl, userAvatarUrl } from "@/lib/discord/cdn";
 import { isTextLike } from "@/lib/discord/format";
 import { useRelay } from "@/lib/discord/store";
-import type { GuildTab } from "@/lib/discord/types";
+import { CHANNEL_TYPES, type GuildTab } from "@/lib/discord/types";
 import { cn } from "@/lib/utils";
 import { AuditPanel } from "./audit-panel";
 import { AutomodPanel } from "./automod-panel";
@@ -490,7 +490,8 @@ function NavItem({
 function GuildRail({ guildId, channelId, tab }: { guildId: string; channelId?: string; tab: GuildTab }) {
   const channels = useRelay((s) => s.channels[guildId] ?? EMPTY);
   const setView = useRelay((s) => s.setView);
-  const textChannels = channels.filter((c) => isTextLike(c.type));
+  // Keep categories so the rail shows the same grouping as Discord.
+  const textChannels = channels.filter((c) => isTextLike(c.type) || c.type === CHANNEL_TYPES.GUILD_CATEGORY);
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -501,8 +502,12 @@ function GuildRail({ guildId, channelId, tab }: { guildId: string; channelId?: s
       <div className="scroll-thin flex-1 overflow-y-auto p-2">
         <ChannelTree
           channels={textChannels}
-          selectedId={tab === "chat" ? channelId : undefined}
-          onSelect={(id) => setView({ t: "guild", id: guildId, tab: "chat", channelId: id })}
+          guildId={guildId}
+          activeId={tab === "chat" ? channelId : undefined}
+          onSelect={(channel) => {
+            if (!isTextLike(channel.type)) return;
+            setView({ t: "guild", id: guildId, tab: "chat", channelId: channel.id });
+          }}
         />
       </div>
     </div>
